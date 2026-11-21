@@ -4,7 +4,9 @@
 #include "simulation/memory.hpp"
 #include "simulation/reactions.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <random>
 namespace evolvinggarden {
@@ -15,7 +17,7 @@ struct CreatureNeeds {
     float boredom = 28.0F;
 };
 enum class Interaction : std::uint8_t {
-    Feed, Pet, Novelty, LoudSound, BroughtToForeground, ReturnedToFarm
+    Feed, Pet, Novelty, LoudSound, BroughtToForeground, ReturnedToFarm, Count
 };
 enum class Action : std::uint8_t { Idle, Explore, Play, Rest, SeekCompany, Observe, Forage };
 inline const char* actionName(Action action) {
@@ -34,6 +36,7 @@ class CreatureSimulation {
 public:
     static constexpr float SignificantEventCooldownSeconds = 600.0F;
     static constexpr float ForegroundBondCooldownSeconds = 600.0F;
+    static constexpr float LoudSoundCooldownSeconds = 1.5F;
 
     explicit CreatureSimulation(Genome genome = makeDefaultGenome())
         : genome_(genome), random_(genome.seed) {
@@ -53,25 +56,93 @@ public:
     float simulationTime() const { return simulationTime_; }
     bool isInForeground() const { return inForeground_; }
 
-    // Returns false when the requested transition is already in effect.
+    float cooldownRemaining(Interaction interaction) const {
+        if (interaction == Interaction::Count) return 0.0F;
+        return cooldowns_[static_cast<std::size_t>(interaction)];
+    }
+
+    // Returns false if the action is on cooldown or the screen state would not change.
     bool applyInteraction(Interaction interaction) {
+        if (interaction == Interaction::Count) return false;
+        if (interaction == Interaction::LoudSound) {
+            return applySoundStimulus(0.62F, 0.22F);
+        }
+
+        const std::size_t index = static_cast<std::size_t>(interaction);
+        if (cooldowns_[index] > 0.0F) return false;
+
         bool changed = true;
         switch (interaction) {
-        case Interaction::Feed: applyFeed(); break;
-        case Interaction::Pet: applyPet(); break;
-        case Interaction::Novelty: applyNovelty(); break;
-        case Interaction::LoudSound: applyLoudSound(); break;
-        case Interaction::BroughtToForeground: changed = bringToForeground(); break;
-        case Interaction::ReturnedToFarm: changed = returnToFarm(); break;
+        case Interaction::Feed:
+            cooldowns_[index] = 1.20F;
+            applyFeed();
+            break;
+        case Interaction::Pet:
+            cooldowns_[index] = 1.40F;
+            applyPet();
+            break;
+        case Interaction::Novelty:
+            cooldowns_[index] = 1.40F;
+            applyNovelty();
+            break;
+        case Interaction::BroughtToForeground:
+            changed = bringToForeground();
+            break;
+        case Interaction::ReturnedToFarm:
+            changed = returnToFarm();
+            break;
+        case Interaction::LoudSound:
+        case Interaction::Count:
+            changed = false;
+            break;
+        }
+        if (changed) updateMood(0.12F);
+        return changed;
+    }
+
+    // The sensor layer will pass measured loudness and event duration here.
+    // intensity is normalized to [0, 1], duration is measured in seconds.
+    bool applySoundStimulus(float intensity, float durationSeconds) {
+        const std::size_t index = static_cast<std::size_t>(Interaction::LoudSound);
+        if (cooldowns_[index] > 0.0F) return false;
+
+        const float loudness = clampValue(intensity, 0.0F, 1.0F);
+        const float duration = clampValue(durationSeconds, 0.0F, 3.0F);
+        if (loudness < 0.08F || duration < 0.03F) return false;
+
+        cooldowns_[index] = LoudSoundCooldownSeconds;
+        soundExposure_ = clampValue(soundExposure_ + loudness * duration, 0.0F, 3.0F);
+
+        const float sensitivity = normalizeTrait(genome_.personality.sensitivity);
+        const float fear = loudness * (22.0F + sensitivity * 64.0F)
+            * (0.65F + std::min(duration, 1.5F) * 0.30F);
+        emotions_.add(Emotion::Surprise, 24.0F + loudness * 35.0F);
+        emotions_.add(Emotion::Fear, fear);
+
+        const bool sustainedOrVeryLoud =
+            (loudness >= 0.88F && duration >= 0.75F) || soundExposure_ >= 1.05F;
+        const Reaction reaction = sustainedOrVeryLoud ? Reaction::Fearful : Reaction::Surprised;
+        const float strength = 45.0F + loudness * 55.0F;
+        const float animationDuration = sustainedOrVeryLoud ? 1.9F : 1.05F;
+        reaction_.trigger(reaction, strength, animationDuration, sustainedOrVeryLoud);
+
+        if (sustainedOrVeryLoud && fear >= 68.0F) {
+            remember(EventType::Startled, -static_cast<int>(fear), 92);
         }
         updateMood(0.12F);
-        return changed;
+        return true;
     }
 
     void update(float deltaSeconds) {
         const float dt = clampValue(deltaSeconds, 0.0F, 0.25F);
         if (dt <= 0.0F) return;
         simulationTime_ += dt;
+
+        for (float& cooldown : cooldowns_) {
+            cooldown = std::max(0.0F, cooldown - dt);
+        }
+        soundExposure_ = std::max(0.0F, soundExposure_ - dt * 0.38F);
+
         updateNeeds(dt);
         emotions_.update(dt);
         reaction_.update(dt);
@@ -79,6 +150,7 @@ public:
         if (actionTimer_ <= 0.0F) chooseAction();
         applyAction(dt);
         updateMood(dt);
+
         float strongestEmotion = 0.0F;
         for (float value : emotions_.values()) strongestEmotion = std::max(strongestEmotion, value);
         emotions_.setArousal(strongestEmotion);
@@ -88,10 +160,10 @@ private:
     void remember(EventType type, int emotionalImpact, int significance, bool bypassCooldown = false) {
         const auto impact = static_cast<std::int8_t>(clampValue(emotionalImpact, -100, 100));
         const auto importance = static_cast<std::uint8_t>(clampValue(significance, 0, 100));
+        if (!bypassCooldown && importance < MemoryJournal::MinimumSignificance) return;
         if (!bypassCooldown && hasSignificantEvent_
-            && simulationTime_ - lastSignificantEventTime_ < SignificantEventCooldownSeconds) {
-            return;
-        }
+            && simulationTime_ - lastSignificantEventTime_ < SignificantEventCooldownSeconds) return;
+
         const bool stored = memories_.add(MemoryEvent{
             static_cast<std::uint32_t>(simulationTime_), type, impact, importance, 0
         });
@@ -101,16 +173,14 @@ private:
         }
     }
 
-    void trigger(Reaction reaction, float strength, float duration) {
-        reaction_.trigger(reaction, strength, duration);
-    }
-
     void applyFeed() {
         const float hungerBefore = needs_.hunger;
         needs_.hunger = clampPercent(needs_.hunger - 42.0F);
         emotions_.add(Emotion::Joy, hungerBefore > 35.0F ? 28.0F : 10.0F);
         emotions_.add(Emotion::Affection, 5.0F);
-        if (hungerBefore > 35.0F) trigger(Reaction::Happy, 82.0F, 1.35F);
+        if (hungerBefore > 35.0F) {
+            reaction_.trigger(Reaction::Happy, 82.0F, 1.15F);
+        }
         if (hungerBefore >= 90.0F) remember(EventType::Fed, 55, 82);
     }
 
@@ -124,13 +194,12 @@ private:
             emotions_.add(Emotion::Joy, 10.0F + welcome * 18.0F);
             emotions_.add(Emotion::Affection, 15.0F + welcome * 20.0F);
             needs_.social = clampPercent(needs_.social - 9.0F);
-            trigger(Reaction::Affectionate, 65.0F + welcome * 30.0F, 1.45F);
+            reaction_.trigger(Reaction::Affectionate, 65.0F + welcome * 30.0F, 1.35F);
         } else {
             emotions_.add(Emotion::Anger, 8.0F + (0.48F - welcome) * 26.0F);
             emotions_.add(Emotion::Fear, sensitivity * 10.0F);
-            trigger(Reaction::Annoyed, 55.0F + (0.48F - welcome) * 70.0F, 0.95F);
+            reaction_.trigger(Reaction::Angry, 55.0F + (0.48F - welcome) * 70.0F, 1.0F);
         }
-
         affectionToPlayer_ = clampPercent(affectionToPlayer_ + (welcome - 0.45F) * 0.35F);
         checkBondMilestone();
     }
@@ -145,7 +214,7 @@ private:
         emotions_.add(Emotion::Surprise, 26.0F);
         emotions_.add(Emotion::Curiosity, 18.0F + curiosity * 20.0F);
         emotions_.add(Emotion::Joy, optimism * 17.0F);
-        trigger(Reaction::Curious, 55.0F + curiosity * 40.0F, 1.5F);
+        reaction_.trigger(Reaction::Curious, 55.0F + curiosity * 40.0F, 1.35F);
 
         const float bondGain = (0.10F + curiosity * 0.72F + optimism * 0.48F)
             * diminishingReturn;
@@ -155,20 +224,8 @@ private:
             - static_cast<float>(noveltyCount_) * 8.0F);
         ++noveltyCount_;
         needs_.boredom = clampPercent(needs_.boredom - 14.0F);
-        remember(EventType::NoveltyDiscovered,
-            static_cast<int>(curiosity * 40.0F), significance);
+        remember(EventType::NoveltyDiscovered, static_cast<int>(curiosity * 40.0F), significance);
         checkBondMilestone();
-    }
-
-    void applyLoudSound() {
-        const float sensitivity = normalizeTrait(genome_.personality.sensitivity);
-        emotions_.add(Emotion::Surprise, 42.0F);
-        const float fear = 12.0F + sensitivity * 72.0F;
-        emotions_.add(Emotion::Fear, fear);
-        trigger(Reaction::Startled, 60.0F + sensitivity * 40.0F, 1.1F);
-        if (fear >= 72.0F) {
-            remember(EventType::Startled, -static_cast<int>(fear), 82);
-        }
     }
 
     bool bringToForeground() {
@@ -179,15 +236,15 @@ private:
         const float curiosity = normalizeTrait(genes.curiosity);
         const float optimism = normalizeTrait(genes.optimism);
         const float sociability = normalizeTrait(genes.sociability);
-        const bool bondCooldownExpired = !hasForegroundReward_
+        const bool rewardReady = !hasForegroundReward_
             || simulationTime_ - lastForegroundRewardTime_ >= ForegroundBondCooldownSeconds;
 
         emotions_.add(Emotion::Joy, 5.0F + optimism * 8.0F);
         emotions_.add(Emotion::Curiosity, curiosity * 8.0F);
         needs_.social = clampPercent(needs_.social - 4.0F);
-        trigger(Reaction::Curious, 60.0F + curiosity * 30.0F, 1.25F);
+        reaction_.trigger(Reaction::Curious, 60.0F + curiosity * 30.0F, 1.2F);
 
-        if (bondCooldownExpired) {
+        if (rewardReady) {
             const float diminishingReturn = 1.0F / std::sqrt(
                 1.0F + static_cast<float>(foregroundVisits_) * 0.35F);
             const float bondGain = (0.08F + curiosity * 0.24F
@@ -199,8 +256,7 @@ private:
             if (foregroundVisits_ == 1) {
                 const int significance = static_cast<int>(
                     65.0F + curiosity * 8.0F + sociability * 8.0F);
-                remember(EventType::BroughtToForeground, static_cast<int>(bondGain * 50.0F),
-                    significance);
+                remember(EventType::BroughtToForeground, static_cast<int>(bondGain * 50.0F), significance);
             }
             checkBondMilestone();
         }
@@ -218,7 +274,6 @@ private:
         if (affectionToPlayer_ >= 100.0F) milestone = 100;
         else if (affectionToPlayer_ >= 75.0F) milestone = 75;
         else if (affectionToPlayer_ >= 50.0F) milestone = 50;
-
         if (milestone > lastBondMilestone_) {
             lastBondMilestone_ = milestone;
             remember(EventType::BondMilestone, 45, 88);
@@ -305,12 +360,14 @@ private:
     MemoryJournal memories_{};
     ReactionState reaction_{};
     Action action_ = Action::Idle;
+    std::array<float, static_cast<std::size_t>(Interaction::Count)> cooldowns_{};
     float mood_ = 0.0F;
     float affectionToPlayer_ = 8.0F;
     float simulationTime_ = 0.0F;
     float actionTimer_ = 0.0F;
     float lastSignificantEventTime_ = 0.0F;
     float lastForegroundRewardTime_ = 0.0F;
+    float soundExposure_ = 0.0F;
     std::uint32_t noveltyCount_ = 0;
     std::uint32_t foregroundVisits_ = 0;
     int lastBondMilestone_ = 0;

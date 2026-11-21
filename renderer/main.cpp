@@ -48,10 +48,13 @@ void drawPersonalityPanel(const CreatureSimulation& creature) {
     drawTraitBar("Curiosity", genes.curiosity, 42, 331, 214);
     drawTraitBar("Activity", genes.activity, 42, 393, 214);
     drawTraitBar("Sensitivity", genes.sensitivity, 42, 455, 214);
-    DrawText("INHERITED TRAITS", 42, 532, 11, TextMuted);
-    DrawText("Genome seed:", 42, 554, 12, TextMuted);
-    DrawText(TextFormat("%08X", creature.genome().seed), 42, 574, 14, TextPrimary);
-    DrawText("Values are prototype defaults", 42, 619, 10, TextMuted);
+    const int usedPoints = genes.netPointCost();
+    DrawText(TextFormat("POINTS  %d / %d", usedPoints, creature.genome().traitPointBudget),
+        42, 532, 12, TextPrimary);
+    DrawText(TextFormat("AVAILABLE  %+d", creature.genome().remainingTraitPoints()),
+        42, 553, 12, creature.genome().remainingTraitPoints() >= 0 ? Accent : Color{213, 125, 112, 255});
+    DrawText(TextFormat("GENOME  %08X", creature.genome().seed), 42, 584, 12, TextMuted);
+    DrawText("Negative traits refund points", 42, 619, 10, TextMuted);
 }
 void drawNeedsAndEmotions(const CreatureSimulation& creature) {
     drawPanel({906.0F, 100.0F, 250.0F, 548.0F}, "STATE");
@@ -89,7 +92,24 @@ void drawHabitat(const CreatureSimulation& creature, float time) {
     renderer::drawProceduralCreature({590.0F, 355.0F}, creature, time);
     DrawText(actionName(creature.action()), 312, 585, 16, TextPrimary);
     DrawText(TextFormat("Mood %+.0f   |   Arousal %.0f", creature.mood(), creature.arousal()),
-        312, 611, 12, TextMuted);
+        312, 608, 12, TextMuted);
+    if (creature.reaction().active()) {
+        const char* reactionLabel = "REACTION";
+        switch (creature.reaction().kind()) {
+        case Reaction::Happy: reactionLabel = "HAPPY"; break;
+        case Reaction::Sad: reactionLabel = "SAD"; break;
+        case Reaction::Angry: reactionLabel = "ANGRY"; break;
+        case Reaction::Fearful: reactionLabel = "FEAR"; break;
+        case Reaction::Surprised: reactionLabel = "SURPRISED"; break;
+        case Reaction::Curious: reactionLabel = "CURIOUS"; break;
+        case Reaction::Affectionate: reactionLabel = "AFFECTION"; break;
+        case Reaction::Disgusted: reactionLabel = "DISGUST"; break;
+        case Reaction::None: break;
+        }
+        DrawText(reactionLabel, 312, 628, 11, Accent);
+        if (creature.reaction().exaggerated())
+            DrawText("EXAGGERATED", 410, 628, 11, Color{238, 166, 112, 255});
+    }
 }
 void drawRecentMemory(const CreatureSimulation& creature) {
     const auto& journal = creature.memories();
@@ -130,20 +150,21 @@ void drawChronicle(const CreatureSimulation& creature, int scrollOffset) {
         startIndex + 1, endIndex, static_cast<int>(journal.size())), 50, 675, 11, TextMuted);
 }
 void drawControls(bool chronicleOpen, bool paused) {
-    DrawText("F  FEED", 30, 715, 12, TextPrimary);
-    DrawText("P  PET", 135, 715, 12, TextPrimary);
-    DrawText("N  NOVELTY", 235, 715, 12, TextPrimary);
-    DrawText("S  SOUND", 365, 715, 12, TextPrimary);
-    DrawText("B  MAIN SCREEN", 465, 715, 11, TextPrimary);
-    DrawText("R  RETURN TO FARM", 595, 715, 11, TextPrimary);
-    DrawText("H  CHRONICLE", 750, 715, 11, TextPrimary);
-    DrawText(paused ? "SPACE  RESUME" : "SPACE  PAUSE", 890, 715, 11, Accent);
-    if (chronicleOpen) DrawText("UP/DOWN SCROLL  |  BACKSPACE RETURN", 965, 715, 9, TextPrimary);
+    DrawText("F FEED", 24, 715, 11, TextPrimary);
+    DrawText("P PET", 100, 715, 11, TextPrimary);
+    DrawText("N NOVELTY", 165, 715, 11, TextPrimary);
+    DrawText("S SOUND", 270, 715, 11, TextPrimary);
+    DrawText("L LONG ROAR", 350, 715, 11, Color{238, 166, 112, 255});
+    DrawText("B MAIN", 470, 715, 11, TextPrimary);
+    DrawText("R FARM", 550, 715, 11, TextPrimary);
+    DrawText("H CHRONICLE", 635, 715, 11, TextPrimary);
+    DrawText(paused ? "SPACE RESUME" : "SPACE PAUSE", 780, 715, 11, Accent);
+    if (chronicleOpen) DrawText("UP/DOWN SCROLL | BACKSPACE RETURN", 915, 715, 10, TextPrimary);
 }
 }
 int main() {
     SetConfigFlags(FLAG_VSYNC_HINT);
-    InitWindow(WindowWidth, WindowHeight, "EvolvingGarden | Behavior Prototype 0.2");
+    InitWindow(WindowWidth, WindowHeight, "EvolvingGarden | Behavior Prototype 0.4");
     SetTargetFPS(60);
     CreatureSimulation creature(makeDefaultGenome());
     float elapsedTime = 0.0F;
@@ -162,6 +183,7 @@ int main() {
             if (IsKeyPressed(KEY_P)) creature.applyInteraction(Interaction::Pet);
             if (IsKeyPressed(KEY_N)) creature.applyInteraction(Interaction::Novelty);
             if (IsKeyPressed(KEY_S)) creature.applyInteraction(Interaction::LoudSound);
+            if (IsKeyPressed(KEY_L)) creature.applySoundStimulus(0.98F, 1.25F);
             if (IsKeyPressed(KEY_B)) creature.applyInteraction(Interaction::BroughtToForeground);
             if (IsKeyPressed(KEY_R)) creature.applyInteraction(Interaction::ReturnedToFarm);
         }
@@ -172,7 +194,7 @@ int main() {
         BeginDrawing();
         ClearBackground(Background);
         DrawText("EVOLVING GARDEN", 28, 25, 25, TextPrimary);
-        DrawText("BEHAVIOR & PROCEDURAL ORGANISM PROTOTYPE  /  0.3", 30, 58, 12, TextMuted);
+        DrawText("BEHAVIOR, TRAITS & REACTION PROTOTYPE  /  0.4", 30, 58, 12, TextMuted);
         DrawText(paused ? "PAUSED" : "SIMULATING", 1010, 35, 12,
             paused ? Color{221, 174, 105, 255} : Accent);
         if (chronicleOpen) drawChronicle(creature, chronicleScroll);

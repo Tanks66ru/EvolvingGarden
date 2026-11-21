@@ -24,6 +24,29 @@ int main() {
         assert(genome.morphology.eyeSize == 62);
     }
     {
+        const Genome base = makeDefaultGenome();
+        assert(base.traitPointBudget == 150);
+        assert(base.personality.netPointCost() == 150);
+        assert(base.remainingTraitPoints() == 0);
+        assert(base.personalityFitsBudget());
+
+        PersonalityGenes tradeoff{};
+        tradeoff.friendliness = 100;
+        tradeoff.optimism = 0;
+        tradeoff.sociability = 0;
+        tradeoff.curiosity = -50;
+        tradeoff.activity = 0;
+        tradeoff.sensitivity = 0;
+        assert(tradeoff.netPointCost() == 50);
+        assert(tradeoff.remainingPoints(150) == 100);
+        assert(tradeoff.fitsBudget(150));
+
+        Genome mutatedBudget = makeDefaultGenome();
+        mutatedBudget.traitPointBudget = 190;
+        mutatedBudget.normalize();
+        assert(mutatedBudget.traitPointBudget == 180);
+    }
+    {
         MemoryJournal journal;
         assert(!journal.add(MemoryEvent{0, EventType::Fed, 0, 74, 0}));
         for (std::uint32_t i = 0; i < MemoryJournal::Capacity + 5; ++i)
@@ -63,21 +86,33 @@ int main() {
         const float bondAfterFirstVisit = creature.affectionToPlayer();
         assert(bondAfterFirstVisit >= bondBefore);
 
-        // Pressing the Main Screen command again while already there does nothing.
         assert(!creature.applyInteraction(Interaction::BroughtToForeground));
         assert(creature.affectionToPlayer() == bondAfterFirstVisit);
 
         assert(creature.applyInteraction(Interaction::ReturnedToFarm));
         assert(!creature.isInForeground());
         assert(creature.applyInteraction(Interaction::BroughtToForeground));
-        // A quick return-and-reopen does not grant another bond reward.
         assert(creature.affectionToPlayer() == bondAfterFirstVisit);
+    }
+    {
+        CreatureSimulation creature;
+        assert(creature.applyInteraction(Interaction::LoudSound));
+        assert(creature.reaction().kind() == Reaction::Surprised);
+        assert(!creature.reaction().exaggerated());
+        assert(creature.cooldownRemaining(Interaction::LoudSound) > 1.4F);
+        assert(!creature.applyInteraction(Interaction::LoudSound));
+
+        advance(creature, CreatureSimulation::LoudSoundCooldownSeconds);
+        assert(creature.applySoundStimulus(0.98F, 1.25F));
+        assert(creature.reaction().kind() == Reaction::Fearful);
+        assert(creature.reaction().exaggerated());
+        assert(!creature.applySoundStimulus(0.98F, 1.25F));
     }
     {
         CreatureSimulation creature;
         creature.applyInteraction(Interaction::Pet);
         creature.applyInteraction(Interaction::Feed);
-        assert(creature.memories().size() == 1); // Routine care is not chronicle material.
+        assert(creature.memories().size() == 1);
 
         advance(creature, CreatureSimulation::SignificantEventCooldownSeconds);
         creature.applyInteraction(Interaction::Novelty);
@@ -85,23 +120,16 @@ int main() {
 
         creature.applyInteraction(Interaction::Novelty);
         creature.applyInteraction(Interaction::Pet);
-        assert(creature.memories().size() == 2); // At most one significant event per 10 minutes.
-
-        advance(creature, CreatureSimulation::SignificantEventCooldownSeconds);
-        Genome sensitiveGenome = makeDefaultGenome();
-        sensitiveGenome.personality.sensitivity = 100;
-        CreatureSimulation sensitive(sensitiveGenome);
-        advance(sensitive, CreatureSimulation::SignificantEventCooldownSeconds);
-        sensitive.applyInteraction(Interaction::LoudSound);
-        assert(sensitive.memories().size() == 2);
-        assert(sensitive.memories().at(1).type == EventType::Startled);
+        assert(creature.memories().size() == 2);
     }
     {
-        CreatureSimulation creature;
-        creature.applyInteraction(Interaction::LoudSound);
-        assert(creature.reaction().kind() == Reaction::Startled);
-        advance(creature, 2.0F);
-        assert(!creature.reaction().active());
+        ReactionState reaction;
+        assert(reaction.trigger(Reaction::Happy, 80.0F, 0.8F));
+        assert(!reaction.trigger(Reaction::Angry, 100.0F, 1.0F));
+        reaction.update(1.0F);
+        assert(!reaction.active());
+        assert(reaction.trigger(Reaction::Angry, 100.0F, 1.0F, true));
+        assert(reaction.exaggerated());
     }
 
     std::cout << "All EvolvingGarden simulation tests passed.\n";

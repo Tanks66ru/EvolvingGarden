@@ -3,23 +3,48 @@
 #include <cstdint>
 namespace evolvinggarden {
 struct PersonalityGenes {
-    std::int16_t friendliness = 42;
-    std::int16_t optimism = 38;
-    std::int16_t sociability = 18;
-    std::int16_t curiosity = 72;
-    std::int16_t activity = 30;
-    std::int16_t sensitivity = 24;
+    // Signed values describe opposite ends of each personality axis.
+    // Positive values spend points; negative values refund points.
+    std::int16_t friendliness = 45;
+    std::int16_t optimism = 35;
+    std::int16_t sociability = 5;
+    std::int16_t curiosity = 55;
+    std::int16_t activity = 20;
+    std::int16_t sensitivity = -10;
+
     void normalize() {
-        friendliness = clampTrait(friendliness); optimism = clampTrait(optimism);
-        sociability = clampTrait(sociability); curiosity = clampTrait(curiosity);
-        activity = clampTrait(activity); sensitivity = clampTrait(sensitivity);
+        friendliness = clampTrait(friendliness);
+        optimism = clampTrait(optimism);
+        sociability = clampTrait(sociability);
+        curiosity = clampTrait(curiosity);
+        activity = clampTrait(activity);
+        sensitivity = clampTrait(sensitivity);
+    }
+
+    int netPointCost() const {
+        return static_cast<int>(friendliness)
+            + static_cast<int>(optimism)
+            + static_cast<int>(sociability)
+            + static_cast<int>(curiosity)
+            + static_cast<int>(activity)
+            + static_cast<int>(sensitivity);
+    }
+
+    int remainingPoints(int budget) const {
+        return budget - netPointCost();
+    }
+
+    bool fitsBudget(int budget) const {
+        return remainingPoints(budget) >= 0;
     }
 };
+
 struct MorphologyGenes {
     std::uint8_t bodyWidth = 55, bodyHeight = 48, roundness = 64, asymmetry = 42;
     std::uint8_t surfaceComplexity = 44, appendageCount = 3, appendageLength = 52;
     std::uint8_t appendageCurvature = 58, eyeSize = 62, eyeSpacing = 48;
     std::uint8_t pigmentation = 62, patternDensity = 38, palette = 2;
+
     void normalize() {
         bodyWidth = clampValue<std::uint8_t>(bodyWidth, 10, 100);
         bodyHeight = clampValue<std::uint8_t>(bodyHeight, 10, 100);
@@ -36,16 +61,34 @@ struct MorphologyGenes {
         palette = static_cast<std::uint8_t>(palette % 5);
     }
 };
+
 struct Genome {
     std::uint32_t seed = 0xE701A11U;
+    // This is a heritable budget gene. Future mutation rules may shift it slightly.
+    std::uint16_t traitPointBudget = 150;
     PersonalityGenes personality{};
     MorphologyGenes morphology{};
-    void normalize() { personality.normalize(); morphology.normalize(); }
+
+    void normalize() {
+        traitPointBudget = clampValue<std::uint16_t>(traitPointBudget, 120, 180);
+        personality.normalize();
+        morphology.normalize();
+    }
+
+    int remainingTraitPoints() const {
+        return personality.remainingPoints(traitPointBudget);
+    }
+
+    bool personalityFitsBudget() const {
+        return personality.fitsBudget(traitPointBudget);
+    }
 };
+
 inline Genome makeDefaultGenome() {
     Genome genome{};
     genome.seed = 0xE701A11U;
-    genome.personality = PersonalityGenes{42, 38, 18, 72, 30, 24};
+    genome.traitPointBudget = 150;
+    genome.personality = PersonalityGenes{45, 35, 5, 55, 20, -10};
     genome.morphology = MorphologyGenes{55, 48, 64, 42, 44, 3, 52, 58, 62, 48, 62, 38, 2};
     return genome;
 }

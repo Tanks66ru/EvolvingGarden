@@ -50,15 +50,19 @@ inline void drawAppendages(
     if (action == Action::Rest || action == Action::Idle) activity = 0.45F;
     if (action == Action::Play) activity = 1.65F;
     if (action == Action::Explore) activity = 1.3F;
-    const float reactionFactor = reactionPower * 1.7F;
+    float amplitude = 1.0F;
+    if (reaction == Reaction::Happy || reaction == Reaction::Curious) amplitude = 1.5F;
+    if (reaction == Reaction::Fearful || reaction == Reaction::Angry) amplitude = 1.9F;
+    if (reaction == Reaction::Affectionate) amplitude = 0.65F;
 
     for (int i = 0; i < count; ++i) {
         const float index = static_cast<float>(i);
         const float angle = -Pi * 0.5F + (2.0F * Pi * index) / static_cast<float>(count);
         float sway = std::sin(time * (1.25F + index * 0.16F) + index * 1.7F)
-            * (3.0F + curvature * 13.0F) * activity;
-        sway += std::sin(time * 8.0F + index * 2.2F) * reactionFactor * 7.0F;
-        if (reaction == Reaction::Startled) sway += std::sin(time * 23.0F + index) * reactionPower * 8.0F;
+            * (3.0F + curvature * 13.0F) * activity * amplitude;
+        sway += std::sin(time * 8.0F + index * 2.2F) * reactionPower * 7.0F;
+        if (reaction == Reaction::Fearful || reaction == Reaction::Surprised)
+            sway += std::sin(time * 23.0F + index) * reactionPower * 8.0F;
 
         const Vector2 direction{std::cos(angle), std::sin(angle)};
         const Vector2 perpendicular{-direction.y, direction.x};
@@ -93,6 +97,7 @@ inline void drawAppendages(
         DrawCircleV(end, 5.5F, darken(color, 0.18F));
     }
 }
+
 inline void drawEye(
     Vector2 center,
     float eyeRadius,
@@ -104,17 +109,19 @@ inline void drawEye(
     bool angry,
     bool sad,
     bool surprised,
-    bool happy)
+    bool happy,
+    bool disgusted)
 {
-    if (happy && eyeOpen < 0.55F) {
+    const Color dark = Color{48, 53, 62, 255};
+    if (happy && eyeOpen < 0.58F) {
         DrawLineEx(
             {center.x - eyeRadius, center.y + 1.0F},
             {center.x, center.y + eyeRadius * 0.25F},
-            3.4F, darken(Color{35, 43, 49, 255}, 0.0F));
+            3.4F, dark);
         DrawLineEx(
             {center.x, center.y + eyeRadius * 0.25F},
             {center.x + eyeRadius, center.y + 1.0F},
-            3.4F, darken(Color{35, 43, 49, 255}, 0.0F));
+            3.4F, dark);
     } else {
         const float visibleHeight = eyeRadius * eyeOpen;
         DrawEllipse(
@@ -131,7 +138,7 @@ inline void drawEye(
                 static_cast<int>(center.y + pupilY),
                 pupilRadius,
                 std::min(visibleHeight * 0.72F, pupilRadius),
-                Color{35, 43, 49, 255}
+                dark
             );
             DrawCircleV(
                 {center.x + pupilX - pupilRadius * 0.34F,
@@ -147,7 +154,7 @@ inline void drawEye(
                             center.y - eyeRadius * 1.25F};
         const Vector2 inner{center.x - static_cast<float>(side) * eyeRadius * 1.05F,
                             center.y - eyeRadius * 0.48F};
-        DrawLineEx(outer, inner, 4.0F, Color{54, 57, 63, 255});
+        DrawLineEx(outer, inner, 4.0F, dark);
     } else if (sad) {
         const Vector2 outer{center.x + static_cast<float>(side) * eyeRadius,
                             center.y - eyeRadius * 0.75F};
@@ -158,9 +165,15 @@ inline void drawEye(
         DrawLineEx(
             {center.x - eyeRadius * 0.75F, center.y - eyeRadius * 1.55F},
             {center.x + eyeRadius * 0.75F, center.y - eyeRadius * 1.55F},
-            2.4F, Color{70, 79, 91, 255});
+            2.4F, dark);
+    } else if (disgusted && side == 1) {
+        DrawLineEx(
+            {center.x - eyeRadius, center.y - eyeRadius * 0.75F},
+            {center.x + eyeRadius, center.y - eyeRadius * 1.1F},
+            3.0F, dark);
     }
 }
+
 inline void drawProceduralCreature(
     Vector2 center,
     const CreatureSimulation& creature,
@@ -173,19 +186,30 @@ inline void drawProceduralCreature(
     const auto& reactionState = creature.reaction();
     const Reaction reaction = reactionState.kind();
     const float reactionPower = reactionState.intensity();
+    const bool superReaction = reactionState.exaggerated();
 
-    const float curiosity = emotion(creature, Emotion::Curiosity);
-    const float fear = emotion(creature, Emotion::Fear);
-    const float anger = emotion(creature, Emotion::Anger);
-    const float surprise = emotion(creature, Emotion::Surprise);
     const float joy = std::max(emotion(creature, Emotion::Joy),
                                emotion(creature, Emotion::Affection) * 0.82F);
     const float sadness = emotion(creature, Emotion::Sadness);
+    const float anger = emotion(creature, Emotion::Anger);
+    const float fear = emotion(creature, Emotion::Fear);
+    const float surprise = emotion(creature, Emotion::Surprise);
+    const float curiosity = emotion(creature, Emotion::Curiosity);
+    const float disgust = emotion(creature, Emotion::Disgust);
+
+    const bool happyFace = joy > 35.0F || reaction == Reaction::Happy || reaction == Reaction::Affectionate;
+    const bool sadFace = sadness > 28.0F || reaction == Reaction::Sad;
+    const bool angryFace = anger > 18.0F || reaction == Reaction::Angry;
+    const bool fearfulFace = fear > 32.0F || reaction == Reaction::Fearful;
+    const bool surprisedFace = surprise > 28.0F || reaction == Reaction::Surprised;
+    const bool curiousFace = curiosity > 38.0F || reaction == Reaction::Curious;
+    const bool disgustedFace = disgust > 28.0F || reaction == Reaction::Disgusted;
 
     float offsetX = std::sin(time * 0.52F) * 2.0F;
     float offsetY = std::sin(time * 2.0F) * 2.6F;
     float squash = std::sin(time * 1.7F) * 0.012F;
     float stretch = 0.0F;
+    float lean = 0.0F;
 
     switch (creature.action()) {
     case Action::Explore:
@@ -220,25 +244,44 @@ inline void drawProceduralCreature(
         squash += 0.035F * reactionPower;
         stretch -= 0.025F * reactionPower;
         break;
-    case Reaction::Affectionate:
-        offsetY -= 5.0F * reactionPower;
-        offsetX += std::sin(time * 8.0F) * 2.5F * reactionPower;
+    case Reaction::Sad:
+        offsetY += 8.0F * reactionPower;
+        lean -= 4.0F * reactionPower;
+        squash -= 0.025F * reactionPower;
         break;
-    case Reaction::Curious:
-        offsetX += 5.0F * reactionPower;
-        offsetY -= 3.0F * reactionPower;
+    case Reaction::Angry:
+        offsetX += std::sin(time * 25.0F) * 5.0F * reactionPower;
+        squash += 0.035F * reactionPower;
         break;
-    case Reaction::Startled:
+    case Reaction::Fearful:
         offsetY -= 17.0F * reactionPower;
         offsetX += std::sin(time * 25.0F) * 3.0F * reactionPower;
         squash -= 0.045F * reactionPower;
         stretch += 0.035F * reactionPower;
         break;
-    case Reaction::Annoyed:
-        offsetX += std::sin(time * 30.0F) * 5.0F * reactionPower;
+    case Reaction::Surprised:
+        offsetY -= 10.0F * reactionPower;
+        stretch += 0.035F * reactionPower;
+        break;
+    case Reaction::Curious:
+        offsetX += 5.0F * reactionPower;
+        offsetY -= 3.0F * reactionPower;
+        lean = 8.0F * reactionPower;
+        break;
+    case Reaction::Affectionate:
+        offsetY -= 5.0F * reactionPower;
+        offsetX += std::sin(time * 8.0F) * 2.5F * reactionPower;
+        break;
+    case Reaction::Disgusted:
+        offsetX -= 8.0F * reactionPower;
+        lean -= 9.0F * reactionPower;
         break;
     case Reaction::None:
         break;
+    }
+    if (superReaction) {
+        offsetY += std::sin(time * 18.0F) * 5.0F * reactionPower;
+        squash += std::sin(time * 18.0F) * 0.035F * reactionPower;
     }
 
     center.x += offsetX;
@@ -277,9 +320,9 @@ inline void drawProceduralCreature(
             + std::cos(5.0F * angle - phase * 0.8F) * 0.24F;
         const float breathing = std::sin(time * 1.8F + angle * 2.0F + phase)
             * (0.006F + activity * 0.006F);
-        const float startledRipple = reaction == Reaction::Startled
+        const float ripple = superReaction
             ? std::sin(time * 22.0F + angle * 5.0F) * reactionPower * 0.012F : 0.0F;
-        const float radius = 1.0F + irregularity * wave + breathing + startledRipple;
+        const float radius = 1.0F + irregularity * wave + breathing + ripple;
         const Vector2 point{
             center.x + std::cos(angle) * radiusX * radius,
             center.y + std::sin(angle) * radiusY * radius
@@ -289,7 +332,6 @@ inline void drawProceduralCreature(
     }
     fan[Segments + 1] = contour[0];
     DrawTriangleFan(fan.data(), static_cast<int>(fan.size()), bodyColor);
-
     for (int i = 0; i < Segments; ++i) {
         const Vector2 from = contour[static_cast<std::size_t>(i)];
         const Vector2 to = contour[static_cast<std::size_t>((i + 1) % Segments)];
@@ -307,44 +349,28 @@ inline void drawProceduralCreature(
             center.x + std::cos(angle) * radiusX * radius,
             center.y + std::sin(angle) * radiusY * radius
         };
-        const float size = 2.5F + static_cast<float>(i % 3) * 1.2F;
-        DrawCircleV(spot, size, Fade(darken(bodyColor, 0.3F), 0.45F));
+        DrawCircleV(spot, 2.5F + static_cast<float>(i % 3) * 1.2F,
+            Fade(darken(bodyColor, 0.3F), 0.45F));
     }
 
     const float eyeScale = 0.76F + static_cast<float>(genes.eyeSize) / 100.0F * 0.52F;
     const float eyeSpacing = 27.0F + static_cast<float>(genes.eyeSpacing) * 0.31F;
     const float eyeRadius = 8.8F * eyeScale;
-    const bool angryFace = anger > 18.0F;
-    const bool fearFace = fear > 32.0F;
-    const bool surprisedFace = surprise > 28.0F;
-    const bool sadFace = sadness > 28.0F && !fearFace;
-    const bool happyFace = joy > 35.0F && !angryFace && !fearFace && !surprisedFace;
-
     float gazeX = std::sin(time * 0.58F + phase) * (2.0F + curiosity * 0.035F);
     float gazeY = std::cos(time * 0.41F + phase * 0.7F) * 1.8F;
+
     switch (creature.action()) {
-    case Action::Explore:
-        gazeX += std::sin(time * 1.2F) * 5.5F;
-        gazeY -= 1.5F;
-        break;
-    case Action::Observe:
-        gazeX += std::sin(time * 0.86F) * 7.0F;
-        break;
-    case Action::Forage:
-        gazeY += 3.0F;
-        break;
-    case Action::SeekCompany:
-        gazeX -= 3.5F;
-        break;
-    case Action::Play:
-        gazeX += std::sin(time * 4.0F) * 3.0F;
-        break;
+    case Action::Explore: gazeX += std::sin(time * 1.2F) * 5.5F; gazeY -= 1.5F; break;
+    case Action::Observe: gazeX += std::sin(time * 0.86F) * 7.0F; break;
+    case Action::Forage: gazeY += 3.0F; break;
+    case Action::SeekCompany: gazeX -= 3.5F; break;
+    case Action::Play: gazeX += std::sin(time * 4.0F) * 3.0F; break;
     case Action::Idle:
-    case Action::Rest:
-        break;
+    case Action::Rest: break;
     }
+    if (curiousFace && reaction != Reaction::Curious) gazeX += std::sin(time * 0.45F + phase) * 2.5F;
     if (reaction == Reaction::Curious) gazeX += 7.0F * reactionPower;
-    if (reaction == Reaction::Startled || fearFace) gazeY -= 3.0F;
+    if (reaction == Reaction::Fearful || fearfulFace) gazeY -= 3.0F;
     if (reaction == Reaction::Affectionate) gazeY += 2.0F;
 
     const float blinkCycle = std::fmod(time + phase, 4.8F);
@@ -352,40 +378,34 @@ inline void drawProceduralCreature(
     float eyeOpen = 1.0F;
     if (angryFace) eyeOpen = 0.62F;
     else if (sadFace) eyeOpen = 0.82F;
-    else if (surprisedFace || fearFace) eyeOpen = 1.13F;
+    else if (surprisedFace || fearfulFace) eyeOpen = 1.13F;
     else if (happyFace) eyeOpen = 0.48F;
     eyeOpen *= 1.0F - blinkAmount * 0.96F;
-    const float pupilScale = (fearFace || surprisedFace) ? 0.78F : 1.0F;
+    const float pupilScale = (fearfulFace || surprisedFace) ? 0.78F : 1.0F;
+
     for (int side = -1; side <= 1; side += 2) {
+        const float sideOffset = static_cast<float>(side);
         const Vector2 eyeCenter{
-            center.x + static_cast<float>(side) * eyeSpacing,
-            center.y - 10.0F + (sadFace ? 2.0F : 0.0F)
+            center.x + sideOffset * eyeSpacing + lean * 0.18F * sideOffset,
+            center.y - 10.0F + (sadFace ? 2.0F : 0.0F) + lean * sideOffset * 0.12F
         };
-        drawEye(
-            eyeCenter, eyeRadius, eyeOpen,
-            gazeX, gazeY, pupilScale, side,
-            angryFace, sadFace, surprisedFace, happyFace
-        );
+        drawEye(eyeCenter, eyeRadius, eyeOpen, gazeX, gazeY, pupilScale, side,
+            angryFace, sadFace, surprisedFace, happyFace, disgustedFace);
     }
 
     const float mouthY = center.y + 29.0F;
-    const float mouthWidth = 10.0F + genes.eyeSize * 0.025F;
-    if (surprisedFace || fearFace) {
-        const float mouthRadius = surprisedFace ? 7.0F : 5.5F;
-        DrawEllipse(
-            static_cast<int>(center.x),
-            static_cast<int>(mouthY),
-            mouthRadius,
-            mouthRadius * (fearFace ? 1.25F : 1.0F),
-            Color{55, 58, 66, 255}
-        );
-        DrawEllipse(
-            static_cast<int>(center.x),
-            static_cast<int>(mouthY - 1.0F),
-            mouthRadius * 0.55F,
-            mouthRadius * 0.65F,
-            darken(bodyColor, 0.18F)
-        );
+    const float mouthWidth = 10.0F + static_cast<float>(genes.eyeSize) * 0.025F;
+    if (surprisedFace || fearfulFace) {
+        const float mouthRadius = superReaction ? 9.0F : (surprisedFace ? 7.0F : 5.5F);
+        DrawEllipse(static_cast<int>(center.x), static_cast<int>(mouthY),
+            mouthRadius, mouthRadius * (fearfulFace ? 1.25F : 1.0F), Color{55, 58, 66, 255});
+        DrawEllipse(static_cast<int>(center.x), static_cast<int>(mouthY - 1.0F),
+            mouthRadius * 0.55F, mouthRadius * 0.65F, darken(bodyColor, 0.18F));
+    } else if (disgustedFace) {
+        DrawLineEx({center.x - mouthWidth, mouthY + 1.0F},
+            {center.x, mouthY - 4.0F}, 3.0F, Color{55, 58, 66, 255});
+        DrawLineEx({center.x, mouthY - 4.0F},
+            {center.x + mouthWidth * 0.75F, mouthY - 1.0F}, 3.0F, Color{55, 58, 66, 255});
     } else {
         float curve = creature.mood() > 12.0F ? 5.5F : -3.5F;
         if (angryFace) curve = -5.5F;
