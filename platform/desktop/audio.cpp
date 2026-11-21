@@ -42,6 +42,7 @@ struct ToneSequence {
 
 ToneSequence sequenceFor(Cue cue) {
     static constexpr Tone button[] = {{1250, 34, 0}};
+    static constexpr Tone hit[] = {{115, 42, 0}, {78, 48, 0}};
     static constexpr Tone happy[] = {{660, 55, 8}, {880, 65, 8}, {1175, 90, 0}};
     static constexpr Tone sad[] = {{440, 110, 18}, {349, 150, 0}};
     static constexpr Tone angry[] = {{190, 70, 12}, {155, 80, 0}};
@@ -53,6 +54,7 @@ ToneSequence sequenceFor(Cue cue) {
 
     switch (cue) {
     case Cue::Button: return {button, std::size(button)};
+    case Cue::Hit: return {hit, std::size(hit)};
     case Cue::Happy: return {happy, std::size(happy)};
     case Cue::Sad: return {sad, std::size(sad)};
     case Cue::Angry: return {angry, std::size(angry)};
