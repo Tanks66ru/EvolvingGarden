@@ -30,6 +30,12 @@ public:
         return minimum + (maximum - minimum) * unit();
     }
 
+    std::uint32_t state() const { return state_; }
+
+    void setState(std::uint32_t state) {
+        state_ = state != 0U ? state : 0xA341316CU;
+    }
+
 private:
     std::uint32_t state_;
 };
