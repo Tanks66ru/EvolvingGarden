@@ -212,7 +212,7 @@ void createUi() {
     createButton(screen, 316, &buttonData[2], "DISCOVER", 0xB9CAE9);
 
     lv_obj_t* footer = makeLabel(screen, "TAP THE CREATURE TOO", &lv_font_montserrat_12, 0x728A85);
-    lv_obj_set_width(466, 466);
+    lv_obj_set_width(footer, 466);
     lv_obj_set_pos(footer, 0, 449);
 }
 
