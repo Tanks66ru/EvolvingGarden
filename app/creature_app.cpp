@@ -3,6 +3,7 @@
 #include "simulation/creature_simulation.hpp"
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
+#include "platform/persistence.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -26,7 +27,7 @@ struct PetUi {
     lv_obj_t* hintLabel = nullptr;
     lv_obj_t* actionButton = nullptr;
     lv_obj_t* actionLabel = nullptr;
-    lv_obj_t* debugOpenButton = nullptr;
+    lv_obj_t* impactRing = nullptr;
     lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
     lv_obj_t* debugLabel = nullptr;
@@ -53,7 +54,14 @@ float messageUntil = 0.0F;
 float nextDebugRefresh = 0.0F;
 float lastHitAnimation = -10.0F;
 float hitDirection = 1.0F;
+float hitPointX = 233.0F;
+float hitPointY = 220.0F;
 float deviceRoll = 0.0F;
+bool storageReady = false;
+bool restoredFromSave = false;
+bool saveRequested = false;
+float saveInterval = 0.0F;
+float secondsSinceSave = 1000.0F;
 float devicePitch = 0.0F;
 const char* messageOverride = nullptr;
 const char* lastStatus = nullptr;
@@ -127,25 +135,55 @@ void setMessage(const char* message, float duration = 1.2F) {
     setStatus(message);
 }
 
+void requestSave() {
+    saveRequested = true;
+}
+
+void updatePersistence(float dt) {
+    if (!storageReady) return;
+    saveInterval += dt;
+    secondsSinceSave += dt;
+
+    // Keep flash writes sparse, but flush interaction and step changes promptly.
+    if ((saveRequested && secondsSinceSave >= 10.0F) || saveInterval >= 60.0F) {
+        (void)persistence::save(pet);
+        saveRequested = false;
+        saveInterval = 0.0F;
+        secondsSinceSave = 0.0F;
+    }
+}
+
 void performFeed() {
     motion::requestWake();
     if (pet.applyInteraction(Interaction::Feed)) {
         setMessage("YUM!");
         audio::play(audio::Cue::Button);
+        requestSave();
     }
 }
 
 void performPet() {
     motion::requestWake();
-    if (pet.applyInteraction(Interaction::Pet)) setMessage("ENJOYING THE SCRATCH", 1.0F);
+    if (pet.applyInteraction(Interaction::Pet)) {
+        setMessage("ENJOYING THE SCRATCH", 1.0F);
+        requestSave();
+    }
 }
 
-void performHit(float touchX) {
+void performHit(float touchX, float touchY) {
     motion::requestWake();
     hitDirection = touchX < 233.0F ? 1.0F : -1.0F;
     if (pet.applyInteraction(Interaction::Hit)) {
         lastHitAnimation = animationTime;
+        hitPointX = std::clamp(touchX, 18.0F, 448.0F);
+        hitPointY = std::clamp(touchY, 18.0F, 448.0F);
+        if (ui.impactRing != nullptr) {
+            lv_obj_clear_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_to_index(ui.impactRing, -1);
+        }
+        audio::play(audio::Cue::Hit);
         setMessage(pet.enjoysSparring() ? "AGAIN! AGAIN!" : "HEY! THAT HURT!");
+        requestSave();
     }
 }
 
@@ -204,7 +242,6 @@ void hideDebugPanel() {
 }
 
 void onActionClicked(lv_event_t*) { performFeed(); }
-void onDebugOpenClicked(lv_event_t*) { showDebugPanel(); }
 void onDebugCloseClicked(lv_event_t*) { hideDebugPanel(); }
 
 void onScreenTouch(lv_event_t*) {
@@ -217,7 +254,7 @@ void onBackgroundTapped(lv_event_t*) {
     if (indev == nullptr) return;
     lv_point_t point{};
     lv_indev_get_point(indev, &point);
-    performHit(static_cast<float>(point.x));
+    performHit(static_cast<float>(point.x), static_cast<float>(point.y));
 }
 
 void onCreaturePointer(lv_event_t* event) {
@@ -257,7 +294,10 @@ void onCreaturePointer(lv_event_t* event) {
         const float offsetX = x - 233.0F;
         const float offsetY = y - 220.0F;
         const float radius = std::sqrt(offsetX * offsetX + offsetY * offsetY);
-        if (radius < 48.0F || radius > 158.0F) return;
+        if (radius < 48.0F || radius > 158.0F) {
+            creatureTouch.hasAngle = false;
+            return;
+        }
 
         const float angle = std::atan2(offsetY, offsetX);
         if (!creatureTouch.hasAngle) {
@@ -271,20 +311,16 @@ void onCreaturePointer(lv_event_t* event) {
         creatureTouch.lastAngle = angle;
         if (std::fabs(delta) < 0.10F || std::fabs(delta) > 1.65F) return;
 
-        const int direction = delta > 0.0F ? 1 : -1;
-        if (creatureTouch.direction == 0) creatureTouch.direction = direction;
-        if (direction == creatureTouch.direction) {
-            creatureTouch.accumulatedAngle += std::fabs(delta);
-        } else {
-            creatureTouch.accumulatedAngle = std::max(
-                0.0F, creatureTouch.accumulatedAngle - std::fabs(delta) * 0.65F);
-        }
+        // Keep a signed angle: clockwise and counter-clockwise strokes are equal.
+        // Small reversals naturally cancel instead of permanently locking a direction.
+        creatureTouch.accumulatedAngle += delta;
 
         constexpr float FullCircle = 6.28318530718F;
-        if (creatureTouch.accumulatedAngle >= FullCircle
+        if (std::fabs(creatureTouch.accumulatedAngle) >= FullCircle
             && animationTime - creatureTouch.lastPetTime >= 0.70F) {
             performPet();
-            creatureTouch.accumulatedAngle -= FullCircle;
+            creatureTouch.accumulatedAngle -=
+                std::copysign(FullCircle, creatureTouch.accumulatedAngle);
             creatureTouch.lastPetTime = animationTime;
             creatureTouch.petTriggered = true;
         }
@@ -292,13 +328,15 @@ void onCreaturePointer(lv_event_t* event) {
     }
 
     if (code == LV_EVENT_RELEASED) {
-        if (creatureTouch.accumulatedAngle >= 4.7F && !creatureTouch.petTriggered) {
+        if (std::fabs(creatureTouch.accumulatedAngle) >= 4.7F && !creatureTouch.petTriggered) {
             performPet();
         } else if (creatureTouch.pathLength < 18.0F && !creatureTouch.petTriggered) {
             lv_indev_t* indev = lv_indev_active();
             lv_point_t point{};
-            if (indev != nullptr) lv_indev_get_point(indev, &point);
-            performHit(static_cast<float>(point.x));
+            if (indev != nullptr) {
+                lv_indev_get_point(indev, &point);
+                performHit(static_cast<float>(point.x), static_cast<float>(point.y));
+            }
         }
         creatureTouch.active = false;
     }
@@ -386,20 +424,23 @@ void createUi() {
 
     createCreature(screen);
 
+    ui.impactRing = lv_obj_create(screen);
+    lv_obj_remove_style_all(ui.impactRing);
+    lv_obj_set_size(ui.impactRing, 24, 24);
+    lv_obj_set_style_radius(ui.impactRing, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.impactRing, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.impactRing, 6, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.impactRing, color(0xFFE3A7), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(ui.impactRing, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_clear_flag(ui.impactRing,
+        static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+    lv_obj_add_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
+
     ui.stepsLabel = makeLabel(screen, "STEPS 000000", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.stepsLabel, 300);
     lv_obj_set_pos(ui.stepsLabel, 24, 18);
 
-    ui.debugOpenButton = lv_button_create(screen);
-    lv_obj_set_size(ui.debugOpenButton, 76, 34);
-    lv_obj_set_pos(ui.debugOpenButton, 366, 12);
-    lv_obj_set_style_bg_color(ui.debugOpenButton, color(0x344451), LV_PART_MAIN);
-    lv_obj_set_style_radius(ui.debugOpenButton, 12, LV_PART_MAIN);
-    lv_obj_add_event_cb(ui.debugOpenButton, onDebugOpenClicked, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t* debugOpenLabel = makeLabel(ui.debugOpenButton, "LAB", &lv_font_montserrat_12, 0xEAF2EF);
-    lv_obj_center(debugOpenLabel);
-
-    ui.hintLabel = makeLabel(screen, "CIRCLE: PET     TAP: HIT", &lv_font_montserrat_12, 0x91AAA4);
+    ui.hintLabel = makeLabel(screen, "CIRCLE: PET   TAP: HIT   BOOT: LAB", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_width(ui.hintLabel, 420);
     lv_obj_set_pos(ui.hintLabel, 23, 48);
 
@@ -452,7 +493,7 @@ void createUi() {
     lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
     lv_label_set_long_mode(ui.debugLabel, LV_LABEL_LONG_WRAP);
 
-    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "TAP BACK TO RETURN", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "BOOT BUTTON: OPEN / CLOSE LAB", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_width(debugHint, 430);
     lv_obj_set_pos(debugHint, 0, 420);
     refreshDebugPanel();
@@ -497,6 +538,30 @@ void updateCreatureVisuals() {
             bodyOffsetY += 4.0F * envelope;
         }
     }
+    if (hitElapsed >= 0.0F && hitElapsed < 0.40F) {
+        const float decay = std::exp(-hitElapsed * 12.0F);
+        bodyOffsetX += std::sin(hitElapsed * 68.0F) * 12.0F * decay;
+        bodyOffsetY += std::cos(hitElapsed * 61.0F) * 4.5F * decay;
+    }
+
+    if (ui.impactRing != nullptr) {
+        if (hitElapsed >= 0.0F && hitElapsed < 0.42F) {
+            const float progress = hitElapsed / 0.42F;
+            const int diameter = static_cast<int>(24.0F + progress * 156.0F);
+            lv_obj_set_size(ui.impactRing, diameter, diameter);
+            lv_obj_set_pos(ui.impactRing,
+                static_cast<int>(hitPointX - diameter * 0.5F),
+                static_cast<int>(hitPointY - diameter * 0.5F));
+            lv_obj_set_style_border_width(ui.impactRing,
+                static_cast<int>(6.0F - progress * 3.5F), LV_PART_MAIN);
+            lv_obj_set_style_border_opa(ui.impactRing,
+                static_cast<lv_opa_t>(255.0F * (1.0F - progress)), LV_PART_MAIN);
+            lv_obj_clear_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_to_index(ui.impactRing, -1);
+        } else {
+            lv_obj_add_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 
     float bodyX = 103.0F;
     float bodyY = 104.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
@@ -505,12 +570,19 @@ void updateCreatureVisuals() {
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
     if (reaction == Reaction::Curious) bodyX += 3.5F * reactionPower;
 
-    const int bodyWidth = static_cast<int>(260.0F * (0.88F + genes.bodyWidth * 0.0024F));
-    const int bodyHeight = static_cast<int>(232.0F * (0.88F + genes.bodyHeight * 0.0024F));
+    const float squash = hitElapsed >= 0.0F && hitElapsed < 0.20F
+        ? std::sin((hitElapsed / 0.20F) * 3.14159265F) * 0.11F : 0.0F;
+    const int bodyWidth = static_cast<int>(260.0F
+        * (0.88F + genes.bodyWidth * 0.0024F) * (1.0F + squash));
+    const int bodyHeight = static_cast<int>(232.0F
+        * (0.88F + genes.bodyHeight * 0.0024F) * (1.0F - squash * 0.75F));
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
     lv_obj_set_pos(ui.body, static_cast<int>(bodyX), static_cast<int>(bodyY));
+    lv_obj_set_style_bg_color(ui.body,
+        hitElapsed >= 0.0F && hitElapsed < 0.075F ? color(0xF4E2B2) : color(0x64C5A7),
+        LV_PART_MAIN);
 
     const float appendageWave = std::sin(phase * (2.3F + activity * 2.8F));
     const float appendageBoost = exaggerated ? 1.8F : 1.0F;
@@ -630,7 +702,16 @@ audio::Cue cueForReaction(Reaction reaction) {
 
 
 void initialize() {
+    storageReady = persistence::initialize();
+    if (storageReady) restoredFromSave = persistence::load(pet);
     createUi();
+    if (restoredFromSave) setMessage("WELCOME BACK", 2.0F);
+}
+
+void toggleDebugPanel() {
+    if (ui.debugPanel == nullptr) return;
+    if (lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)) showDebugPanel();
+    else hideDebugPanel();
 }
 
 void update(float deltaSeconds) {
@@ -647,17 +728,18 @@ void update(float deltaSeconds) {
         const std::uint32_t newSteps = sensor.steps - lastMotionSteps;
         if (pet.registerSteps(newSteps)) setMessage("YOU FOUND SOMETHING!", 1.6F);
         lastMotionSteps = sensor.steps;
+        requestSave();
     }
     if (sensor.shakeEvents > lastShakeEvents) {
-        pet.applyInteraction(Interaction::Shake);
+        if (pet.applyInteraction(Interaction::Shake)) requestSave();
         lastShakeEvents = sensor.shakeEvents;
     }
     if (sensor.tiltEvents > lastTiltEvents) {
-        pet.applyInteraction(Interaction::Tilt);
+        if (pet.applyInteraction(Interaction::Tilt)) requestSave();
         lastTiltEvents = sensor.tiltEvents;
     }
     if (sensor.rotationEvents > lastRotationEvents) {
-        pet.applyInteraction(Interaction::Rotate);
+        if (pet.applyInteraction(Interaction::Rotate)) requestSave();
         lastRotationEvents = sensor.rotationEvents;
     }
 
@@ -672,9 +754,10 @@ void update(float deltaSeconds) {
     float soundIntensity = 0.0F;
     float soundDuration = 0.0F;
     if (audio::consumeSoundEvent(soundIntensity, soundDuration)) {
-        pet.applySoundStimulus(soundIntensity, soundDuration);
+        if (pet.applySoundStimulus(soundIntensity, soundDuration)) requestSave();
     }
     pet.update(dt);
+    updatePersistence(dt);
 
     const Reaction currentReaction = pet.reaction().kind();
     if (currentReaction == Reaction::None) lastAudioReaction = Reaction::None;
