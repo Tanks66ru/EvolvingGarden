@@ -9,6 +9,7 @@ idf_component_register(
         "${EVOLVING_GARDEN_ROOT}"
     REQUIRES
         spiffs
+        esp_codec_dev
 )
 
 spiffs_create_partition_image(
