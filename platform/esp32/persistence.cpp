@@ -5,12 +5,17 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include <type_traits>
+
 namespace evolvinggarden::persistence {
 namespace {
 
 constexpr char Tag[] = "GardenSave";
 constexpr char Namespace[] = "garden";
 constexpr char Key[] = "pet_state";
+
+static_assert(std::is_trivially_copyable<CreatureSimulation::PersistentState>::value,
+    "NVS snapshots must remain trivially copyable");
 
 } // namespace
 
