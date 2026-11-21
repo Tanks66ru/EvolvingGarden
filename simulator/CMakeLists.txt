@@ -49,6 +49,7 @@ add_executable(EvolvingGardenSimulator
     main.cpp
     ../app/creature_app.cpp
     ../platform/desktop/audio.cpp
+    ../platform/desktop/motion.cpp
 )
 
 target_include_directories(EvolvingGardenSimulator PRIVATE

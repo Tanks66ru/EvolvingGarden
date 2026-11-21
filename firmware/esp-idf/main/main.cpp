@@ -3,13 +3,24 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "platform/audio.hpp"
+#include "platform/motion.hpp"
 
 namespace {
 
 constexpr char Tag[] = "EvolvingGarden";
 constexpr float FrameStepSeconds = 1.0F / 30.0F;
+int activeBrightness = 100;
+bool displaySleeping = false;
 
 void onFrame(lv_timer_t*) {
+    evolvinggarden::motion::update(FrameStepSeconds);
+
+    const auto sensor = evolvinggarden::motion::state();
+    if (sensor.screenSleeping != displaySleeping) {
+        displaySleeping = sensor.screenSleeping;
+        (void)bsp_display_brightness_set(displaySleeping ? 0 : activeBrightness);
+    }
+
     evolvinggarden::app::update(FrameStepSeconds);
 }
 
@@ -22,17 +33,16 @@ extern "C" void app_main(void) {
         return;
     }
 
+    activeBrightness = bsp_display_brightness_get();
+    if (activeBrightness < 1) activeBrightness = 100;
+
+    evolvinggarden::motion::initialize();
     evolvinggarden::audio::initialize();
 
     bsp_display_lock(-1);
-    if (lv_indev_t* indev = bsp_display_get_input_dev()) {
-        lv_indev_set_gesture_min_distance(indev, 42);
-        lv_indev_set_gesture_min_velocity(indev, 100);
-    }
-
     evolvinggarden::app::initialize();
     lv_timer_create(onFrame, 33, nullptr);
     bsp_display_unlock();
 
-    ESP_LOGI(Tag, "Ready. Tap the action button; swipe right to cycle actions, left for debug.");
+    ESP_LOGI(Tag, "Ready. FEED button; tap creature to spar; circle around it to pet; LAB opens diagnostics.");
 }

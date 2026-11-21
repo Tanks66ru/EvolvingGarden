@@ -136,6 +136,41 @@ int main() {
         assert(creature.memories().size() == 2);
     }
     {
+        Genome hostileGenome = makeDefaultGenome();
+        hostileGenome.personality.friendliness = -35;
+        CreatureSimulation hostile(hostileGenome);
+        CreatureSimulation friendly;
+        assert(hostile.enjoysSparring());
+        assert(!friendly.enjoysSparring());
+
+        assert(hostile.applyInteraction(Interaction::Hit));
+        assert(hostile.reaction().kind() == Reaction::Happy);
+        assert(hostile.emotions().value(Emotion::Joy) > 0.0F);
+
+        assert(friendly.applyInteraction(Interaction::Hit));
+        assert(friendly.reaction().kind() == Reaction::Angry);
+        assert(friendly.emotions().value(Emotion::Anger) > 0.0F);
+    }
+    {
+        CreatureSimulation creature;
+        assert(!creature.registerSteps(9));
+        assert(creature.stepsTaken() == 9);
+        assert(creature.registerSteps(1));
+        assert(creature.stepsTaken() == 10);
+        assert(creature.emotions().value(Emotion::Curiosity) > 0.0F);
+    }
+    {
+        CreatureSimulation creature;
+        assert(creature.applyInteraction(Interaction::Shake));
+        assert(creature.reaction().kind() == Reaction::Surprised);
+        advance(creature, 1.2F);
+        assert(creature.applyInteraction(Interaction::Tilt));
+        assert(creature.reaction().kind() == Reaction::Curious);
+        advance(creature, 1.2F);
+        assert(creature.applyInteraction(Interaction::Rotate));
+        assert(creature.reaction().kind() == Reaction::Surprised);
+    }
+    {
         ReactionState reaction;
         assert(reaction.trigger(Reaction::Happy, 80.0F, 0.8F));
         assert(!reaction.trigger(Reaction::Angry, 100.0F, 1.0F));

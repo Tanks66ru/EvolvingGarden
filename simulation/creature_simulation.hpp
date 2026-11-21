@@ -17,7 +17,8 @@ struct CreatureNeeds {
     float boredom = 28.0F;
 };
 enum class Interaction : std::uint8_t {
-    Feed, Pet, Novelty, LoudSound, BadTaste, BroughtToForeground, ReturnedToFarm, Count
+    Feed, Pet, Novelty, LoudSound, BadTaste, BroughtToForeground, ReturnedToFarm,
+    Hit, Shake, Tilt, Rotate, Count
 };
 enum class Action : std::uint8_t { Idle, Explore, Play, Rest, SeekCompany, Observe, Forage };
 inline const char* actionName(Action action) {
@@ -55,6 +56,25 @@ public:
     float affectionToPlayer() const { return affectionToPlayer_; }
     float simulationTime() const { return simulationTime_; }
     bool isInForeground() const { return inForeground_; }
+    std::uint32_t stepsTaken() const { return stepCount_; }
+    bool enjoysSparring() const { return genome_.personality.friendliness <= -20; }
+
+    // Walking-like movement is supplied by the physical sensor layer.
+    // Every ten real steps can produce a discovery.
+    bool registerSteps(std::uint32_t count) {
+        if (count == 0) return false;
+
+        const std::uint32_t previousMilestone = stepCount_ / 10U;
+        stepCount_ += count;
+        emotions_.add(Emotion::Joy, std::min(5.0F, static_cast<float>(count) * 0.32F));
+        emotions_.add(Emotion::Curiosity, std::min(4.0F, static_cast<float>(count) * 0.28F));
+
+        bool discovered = false;
+        for (std::uint32_t milestone = previousMilestone; milestone < stepCount_ / 10U; ++milestone) {
+            if (applyInteraction(Interaction::Novelty)) discovered = true;
+        }
+        return discovered;
+    }
 
     float cooldownRemaining(Interaction interaction) const {
         if (interaction == Interaction::Count) return 0.0F;
@@ -78,7 +98,7 @@ public:
             applyFeed();
             break;
         case Interaction::Pet:
-            cooldowns_[index] = 1.40F;
+            cooldowns_[index] = 0.75F;
             applyPet();
             break;
         case Interaction::Novelty:
@@ -94,6 +114,22 @@ public:
             break;
         case Interaction::ReturnedToFarm:
             changed = returnToFarm();
+            break;
+        case Interaction::Hit:
+            cooldowns_[index] = 0.55F;
+            applyHit();
+            break;
+        case Interaction::Shake:
+            cooldowns_[index] = 1.10F;
+            applyShake();
+            break;
+        case Interaction::Tilt:
+            cooldowns_[index] = 1.20F;
+            applyTilt();
+            break;
+        case Interaction::Rotate:
+            cooldowns_[index] = 1.20F;
+            applyRotate();
             break;
         case Interaction::LoudSound:
         case Interaction::Count:
@@ -250,6 +286,62 @@ private:
         const bool exaggerated = sensitivity >= 0.80F;
         reaction_.trigger(Reaction::Disgusted, 78.0F + sensitivity * 20.0F,
             exaggerated ? 1.65F : 1.15F, exaggerated);
+    }
+
+    void applyHit() {
+        const float sensitivity = normalizeTrait(genome_.personality.sensitivity);
+        if (enjoysSparring()) {
+            // Low-friendliness creatures interpret a tap as an invitation to spar.
+            emotions_.add(Emotion::Joy, 28.0F);
+            emotions_.add(Emotion::Surprise, 22.0F);
+            emotions_.add(Emotion::Affection, 3.0F);
+            reaction_.trigger(Reaction::Happy, 88.0F, 0.78F, true);
+            action_ = Action::Play;
+            actionTimer_ = 0.85F;
+        } else {
+            // Friendly creatures dislike being struck and become defensive.
+            emotions_.add(Emotion::Anger, 24.0F + sensitivity * 12.0F);
+            emotions_.add(Emotion::Fear, sensitivity * 20.0F);
+            emotions_.add(Emotion::Sadness, 9.0F);
+            affectionToPlayer_ = clampPercent(affectionToPlayer_ - 1.5F);
+            const bool frightened = sensitivity >= 0.68F;
+            reaction_.trigger(frightened ? Reaction::Fearful : Reaction::Angry,
+                frightened ? 82.0F : 78.0F, 1.0F, frightened);
+            action_ = Action::SeekCompany;
+            actionTimer_ = 1.0F;
+        }
+        updateMood(0.12F);
+    }
+
+    void applyShake() {
+        const float sensitivity = normalizeTrait(genome_.personality.sensitivity);
+        emotions_.add(Emotion::Surprise, 38.0F);
+        if (sensitivity >= 0.72F) {
+            emotions_.add(Emotion::Fear, 24.0F);
+            reaction_.trigger(Reaction::Fearful, 76.0F, 1.05F);
+        } else {
+            emotions_.add(Emotion::Joy, 14.0F);
+            reaction_.trigger(Reaction::Surprised, 82.0F, 0.90F);
+        }
+        action_ = Action::Observe;
+        actionTimer_ = 0.8F;
+    }
+
+    void applyTilt() {
+        const float activity = normalizeTrait(genome_.personality.activity);
+        emotions_.add(Emotion::Curiosity, 18.0F);
+        emotions_.add(Emotion::Surprise, 10.0F);
+        reaction_.trigger(Reaction::Curious, 68.0F, 1.0F);
+        action_ = activity >= 0.55F ? Action::Play : Action::Observe;
+        actionTimer_ = 0.9F;
+    }
+
+    void applyRotate() {
+        emotions_.add(Emotion::Surprise, 25.0F);
+        emotions_.add(Emotion::Curiosity, 10.0F);
+        reaction_.trigger(Reaction::Surprised, 76.0F, 0.95F);
+        action_ = Action::Observe;
+        actionTimer_ = 0.9F;
     }
 
     bool bringToForeground() {
@@ -414,6 +506,7 @@ private:
     float nextAutonomousReactionTime_ = 0.0F;
     std::uint32_t noveltyCount_ = 0;
     std::uint32_t foregroundVisits_ = 0;
+    std::uint32_t stepCount_ = 0;
     int lastBondMilestone_ = 0;
     bool hasSignificantEvent_ = false;
     bool hasForegroundReward_ = false;

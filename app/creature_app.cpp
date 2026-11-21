@@ -2,6 +2,7 @@
 
 #include "simulation/creature_simulation.hpp"
 #include "platform/audio.hpp"
+#include "platform/motion.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,34 +22,47 @@ struct PetUi {
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
     lv_obj_t* status = nullptr;
+    lv_obj_t* stepsLabel = nullptr;
+    lv_obj_t* hintLabel = nullptr;
     lv_obj_t* actionButton = nullptr;
     lv_obj_t* actionLabel = nullptr;
+    lv_obj_t* debugOpenButton = nullptr;
+    lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
     lv_obj_t* debugLabel = nullptr;
 };
 
-struct ActionOption {
-    Interaction interaction;
-    const char* label;
-    const char* acceptedMessage;
-    std::uint32_t buttonColor;
+struct CreatureTouchGesture {
+    bool active = false;
+    bool hasAngle = false;
+    bool petTriggered = false;
+    int direction = 0;
+    float lastAngle = 0.0F;
+    float accumulatedAngle = 0.0F;
+    float pathLength = 0.0F;
+    float lastPetTime = -10.0F;
+    float startX = 0.0F;
+    float startY = 0.0F;
 };
 
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
+CreatureTouchGesture creatureTouch;
 float animationTime = 0.0F;
 float messageUntil = 0.0F;
 float nextDebugRefresh = 0.0F;
+float lastHitAnimation = -10.0F;
+float hitDirection = 1.0F;
+float deviceRoll = 0.0F;
+float devicePitch = 0.0F;
 const char* messageOverride = nullptr;
 const char* lastStatus = nullptr;
-int selectedAction = 0;
+std::uint32_t lastMotionSteps = 0;
+std::uint32_t lastShakeEvents = 0;
+std::uint32_t lastTiltEvents = 0;
+std::uint32_t lastRotationEvents = 0;
+std::uint32_t lastDisplayedSteps = 0xFFFFFFFFU;
 Reaction lastAudioReaction = Reaction::None;
-
-ActionOption actionOptions[] = {
-    {Interaction::Pet, "PET   < >", "THAT'S NICE", 0xB7E3D1},
-    {Interaction::Feed, "FEED   < >", "YUM!", 0xE5C98F},
-    {Interaction::Novelty, "DISCOVER   < >", "WHAT IS THAT?", 0xB9CAE9}
-};
 
 lv_color_t color(std::uint32_t hex) {
     return lv_color_hex(hex);
@@ -107,92 +121,207 @@ const char* actionTag(Action action) {
     return "WANDERING";
 }
 
-void updateActionButton() {
-    if (ui.actionButton == nullptr || ui.actionLabel == nullptr) return;
-    const ActionOption& option = actionOptions[selectedAction];
-    lv_label_set_text(ui.actionLabel, option.label);
-    lv_obj_set_style_bg_color(ui.actionButton, color(option.buttonColor), LV_PART_MAIN);
+void setMessage(const char* message, float duration = 1.2F) {
+    messageOverride = message;
+    messageUntil = animationTime + duration;
+    setStatus(message);
 }
-void selectNextAction() {
-    selectedAction = (selectedAction + 1) % (sizeof(actionOptions) / sizeof(actionOptions[0]));
-    updateActionButton();
-}
-void performSelectedAction() {
-    const ActionOption& option = actionOptions[selectedAction];
-    if (pet.applyInteraction(option.interaction)) {
-        messageOverride = option.acceptedMessage;
-        messageUntil = animationTime + 1.15F;
-        setStatus(messageOverride);
+
+void performFeed() {
+    motion::requestWake();
+    if (pet.applyInteraction(Interaction::Feed)) {
+        setMessage("YUM!");
         audio::play(audio::Cue::Button);
     }
 }
-void onActionClicked(lv_event_t*) { performSelectedAction(); }
+
+void performPet() {
+    motion::requestWake();
+    if (pet.applyInteraction(Interaction::Pet)) setMessage("ENJOYING THE SCRATCH", 1.0F);
+}
+
+void performHit(float touchX) {
+    motion::requestWake();
+    hitDirection = touchX < 233.0F ? 1.0F : -1.0F;
+    if (pet.applyInteraction(Interaction::Hit)) {
+        lastHitAnimation = animationTime;
+        setMessage(pet.enjoysSparring() ? "AGAIN! AGAIN!" : "HEY! THAT HURT!");
+    }
+}
 
 void refreshDebugPanel() {
     if (ui.debugLabel == nullptr) return;
     const CreatureNeeds& needs = pet.needs();
-    char text[512]{};
+    const motion::State sensor = motion::state();
+    char text[768]{};
     std::snprintf(text, sizeof(text),
         "MICROPHONE   %s   %u%%\n"
-        "SPEAKER      %s\n\n"
+        "SPEAKER      %s\n"
+        "MOTION       %s\n"
+        "ORIENTATION  %s\n"
+        "SCREEN       %s\n\n"
+        "STEPS        %lu\n"
+        "SHAKES       %lu\n"
+        "TILTS        %lu\n"
+        "ROTATIONS    %lu\n"
+        "ROLL / PITCH %+.0f / %+.0f\n"
+        "ACCEL / GYRO %.1f / %.1f\n\n"
         "HUNGER       %3.0f%%\n"
         "ENERGY       %3.0f%%\n"
         "SOCIAL       %3.0f%%\n"
         "BOREDOM      %3.0f%%\n\n"
         "MOOD         %+.0f\n"
         "REACTION     %s\n"
-        "ACTION       %s\n\n"
-        "AUDIO INPUT   %s\n"
-        "AUDIO OUTPUT  %s",
+        "ACTION       %s",
         audio::microphoneReady() ? "READY" : "OFF",
         static_cast<unsigned>(audio::microphoneLevelPercent()),
         audio::speakerReady() ? "READY" : "OFF",
+        sensor.ready ? "READY" : "OFF",
+        sensor.orientationCalibrated ? "CALIBRATED" : "HOLD FLAT",
+        sensor.screenSleeping ? "SLEEPING" : "AWAKE",
+        static_cast<unsigned long>(pet.stepsTaken()),
+        static_cast<unsigned long>(sensor.shakeEvents),
+        static_cast<unsigned long>(sensor.tiltEvents),
+        static_cast<unsigned long>(sensor.rotationEvents),
+        sensor.rollDegrees, sensor.pitchDegrees,
+        sensor.linearAcceleration, sensor.angularVelocity,
         needs.hunger, needs.energy, needs.social, needs.boredom,
-        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()),
-        audio::microphoneReady() ? "ONBOARD MIC" : "UNAVAILABLE",
-        audio::speakerReady() ? "ONBOARD SPEAKER" : "UNAVAILABLE");
+        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()));
     lv_label_set_text(ui.debugLabel, text);
 }
+
 void showDebugPanel() {
+    motion::requestWake();
     if (ui.debugPanel == nullptr) return;
     refreshDebugPanel();
     lv_obj_clear_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_to_index(ui.debugPanel, -1);
 }
+
 void hideDebugPanel() {
+    motion::requestWake();
     if (ui.debugPanel != nullptr) lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
 }
-void onMainGesture(lv_event_t*) {
+
+void onActionClicked(lv_event_t*) { performFeed(); }
+void onDebugOpenClicked(lv_event_t*) { showDebugPanel(); }
+void onDebugCloseClicked(lv_event_t*) { hideDebugPanel(); }
+
+void onScreenTouch(lv_event_t*) {
+    motion::requestWake();
+}
+
+void onBackgroundTapped(lv_event_t*) {
+    motion::requestWake();
     lv_indev_t* indev = lv_indev_active();
     if (indev == nullptr) return;
-    const lv_dir_t direction = lv_indev_get_gesture_dir(indev);
-    if (direction == LV_DIR_LEFT) showDebugPanel();
-    else if (direction == LV_DIR_RIGHT) selectNextAction();
+    lv_point_t point{};
+    lv_indev_get_point(indev, &point);
+    performHit(static_cast<float>(point.x));
 }
-void onDebugGesture(lv_event_t*) {
-    lv_indev_t* indev = lv_indev_active();
-    if (indev != nullptr && lv_indev_get_gesture_dir(indev) == LV_DIR_RIGHT) hideDebugPanel();
-}
-void onBodyTouched(lv_event_t*) {
-    if (pet.applyInteraction(Interaction::Pet)) {
-        messageOverride = "THAT'S NICE";
-        messageUntil = animationTime + 1.15F;
-        setStatus(messageOverride);
+
+void onCreaturePointer(lv_event_t* event) {
+    const lv_event_code_t code = lv_event_get_code(event);
+
+    if (code == LV_EVENT_PRESSED) {
+        const bool wokeScreen = motion::requestWake();
+        creatureTouch = {};
+        if (wokeScreen) return;
+
+        lv_indev_t* indev = lv_indev_active();
+        if (indev == nullptr) return;
+        lv_point_t point{};
+        lv_indev_get_point(indev, &point);
+        creatureTouch.active = true;
+        creatureTouch.startX = static_cast<float>(point.x);
+        creatureTouch.startY = static_cast<float>(point.y);
+        return;
+    }
+
+    if (!creatureTouch.active) return;
+
+    if (code == LV_EVENT_PRESSING) {
+        lv_indev_t* indev = lv_indev_active();
+        if (indev == nullptr) return;
+
+        lv_point_t point{};
+        lv_indev_get_point(indev, &point);
+        const float x = static_cast<float>(point.x);
+        const float y = static_cast<float>(point.y);
+        const float dx = x - creatureTouch.startX;
+        const float dy = y - creatureTouch.startY;
+        creatureTouch.pathLength += std::sqrt(dx * dx + dy * dy);
+        creatureTouch.startX = x;
+        creatureTouch.startY = y;
+
+        const float offsetX = x - 233.0F;
+        const float offsetY = y - 220.0F;
+        const float radius = std::sqrt(offsetX * offsetX + offsetY * offsetY);
+        if (radius < 48.0F || radius > 158.0F) return;
+
+        const float angle = std::atan2(offsetY, offsetX);
+        if (!creatureTouch.hasAngle) {
+            creatureTouch.lastAngle = angle;
+            creatureTouch.hasAngle = true;
+            return;
+        }
+
+        const float rawDelta = angle - creatureTouch.lastAngle;
+        const float delta = std::atan2(std::sin(rawDelta), std::cos(rawDelta));
+        creatureTouch.lastAngle = angle;
+        if (std::fabs(delta) < 0.10F || std::fabs(delta) > 1.65F) return;
+
+        const int direction = delta > 0.0F ? 1 : -1;
+        if (creatureTouch.direction == 0) creatureTouch.direction = direction;
+        if (direction == creatureTouch.direction) {
+            creatureTouch.accumulatedAngle += std::fabs(delta);
+        } else {
+            creatureTouch.accumulatedAngle = std::max(
+                0.0F, creatureTouch.accumulatedAngle - std::fabs(delta) * 0.65F);
+        }
+
+        constexpr float FullCircle = 6.28318530718F;
+        if (creatureTouch.accumulatedAngle >= FullCircle
+            && animationTime - creatureTouch.lastPetTime >= 0.70F) {
+            performPet();
+            creatureTouch.accumulatedAngle -= FullCircle;
+            creatureTouch.lastPetTime = animationTime;
+            creatureTouch.petTriggered = true;
+        }
+        return;
+    }
+
+    if (code == LV_EVENT_RELEASED) {
+        if (creatureTouch.accumulatedAngle >= 4.7F && !creatureTouch.petTriggered) {
+            performPet();
+        } else if (creatureTouch.pathLength < 18.0F && !creatureTouch.petTriggered) {
+            lv_indev_t* indev = lv_indev_active();
+            lv_point_t point{};
+            if (indev != nullptr) lv_indev_get_point(indev, &point);
+            performHit(static_cast<float>(point.x));
+        }
+        creatureTouch.active = false;
     }
 }
 
 void createCreature(lv_obj_t* parent) {
     // Appendages are created first so the body is drawn over their roots.
     ui.appendages[0] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[0], LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(ui.appendages[0], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_clear_flag(ui.appendages[0], LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(ui.appendages[0], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[0], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[1] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[1], LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(ui.appendages[1], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_clear_flag(ui.appendages[1], LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(ui.appendages[1], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[1], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[2] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[2], LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(ui.appendages[2], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_clear_flag(ui.appendages[2], LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(ui.appendages[2], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[2], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.body = lv_obj_create(parent);
@@ -202,29 +331,33 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_set_style_shadow_width(ui.body, 18, LV_PART_MAIN);
     lv_obj_set_style_shadow_opa(ui.body, 45, LV_PART_MAIN);
     lv_obj_set_style_shadow_color(ui.body, color(0x0A151C), LV_PART_MAIN);
-    lv_obj_add_flag(ui.body, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(ui.body, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_add_event_cb(ui.body, onBodyTouched, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_flag(ui.body, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_clear_flag(ui.body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(ui.body, onCreaturePointer, LV_EVENT_ALL, nullptr);
 
     for (int i = 0; i < 2; ++i) {
         ui.eyes[i] = lv_obj_create(ui.body);
-        lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_clear_flag(ui.eyes[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.eyes[i], 0xF5F7F4, LV_RADIUS_CIRCLE);
         lv_obj_set_style_border_width(ui.eyes[i], 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(ui.eyes[i], color(0xDCE5E1), LV_PART_MAIN);
 
         ui.pupils[i] = lv_obj_create(ui.eyes[i]);
-        lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.pupils[i], 0x182630, LV_RADIUS_CIRCLE);
 
         ui.brows[i] = lv_obj_create(ui.body);
-        lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.brows[i], 0x347E70, LV_RADIUS_CIRCLE);
         lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
     }
 
     ui.mouth = lv_obj_create(ui.body);
-    lv_obj_add_flag(ui.mouth, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_flag(ui.mouth, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_clear_flag(ui.mouth, LV_OBJ_FLAG_SCROLLABLE);
     makeFlatObject(ui.mouth, 0x25333A, LV_RADIUS_CIRCLE);
 
     lv_obj_set_size(ui.body, 260, 232);
@@ -246,29 +379,45 @@ void createUi() {
     lv_obj_set_style_bg_color(screen, color(0x111B24), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
-    lv_obj_add_event_cb(screen, onMainGesture, LV_EVENT_GESTURE, nullptr);
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(screen, onScreenTouch, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(screen, onBackgroundTapped, LV_EVENT_CLICKED, nullptr);
 
     createCreature(screen);
 
-    ui.status = makeLabel(screen, "WANDERING", &lv_font_montserrat_14, 0xBDE5D5);
-    lv_obj_add_flag(ui.status, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    ui.stepsLabel = makeLabel(screen, "STEPS 000000", &lv_font_montserrat_14, 0xBDE5D5);
+    lv_obj_set_width(ui.stepsLabel, 300);
+    lv_obj_set_pos(ui.stepsLabel, 24, 18);
+
+    ui.debugOpenButton = lv_button_create(screen);
+    lv_obj_set_size(ui.debugOpenButton, 76, 34);
+    lv_obj_set_pos(ui.debugOpenButton, 366, 12);
+    lv_obj_set_style_bg_color(ui.debugOpenButton, color(0x344451), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.debugOpenButton, 12, LV_PART_MAIN);
+    lv_obj_add_event_cb(ui.debugOpenButton, onDebugOpenClicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* debugOpenLabel = makeLabel(ui.debugOpenButton, "LAB", &lv_font_montserrat_12, 0xEAF2EF);
+    lv_obj_center(debugOpenLabel);
+
+    ui.hintLabel = makeLabel(screen, "CIRCLE: PET     TAP: HIT", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_set_width(ui.hintLabel, 420);
+    lv_obj_set_pos(ui.hintLabel, 23, 48);
+
+    ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
     lv_obj_set_pos(ui.status, 23, 354);
 
     ui.actionButton = lv_button_create(screen);
     lv_obj_set_size(ui.actionButton, 280, 66);
     lv_obj_set_pos(ui.actionButton, 93, 384);
-    lv_obj_set_style_bg_color(ui.actionButton, color(actionOptions[0].buttonColor), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(ui.actionButton, color(0xE5C98F), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui.actionButton, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(ui.actionButton, 24, LV_PART_MAIN);
     lv_obj_set_style_border_width(ui.actionButton, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(ui.actionButton, 0, LV_PART_MAIN);
-    lv_obj_add_flag(ui.actionButton, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(ui.actionButton, onActionClicked, LV_EVENT_CLICKED, nullptr);
-
-    ui.actionLabel = makeLabel(ui.actionButton, "PET   < >", &lv_font_montserrat_18, 0x14252C);
+    ui.actionLabel = makeLabel(ui.actionButton, "FEED", &lv_font_montserrat_18, 0x14252C);
     lv_obj_center(ui.actionLabel);
-    lv_obj_add_flag(ui.actionLabel, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
     ui.debugPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.debugPanel);
@@ -276,22 +425,36 @@ void createUi() {
     lv_obj_set_pos(ui.debugPanel, 0, 0);
     lv_obj_set_style_bg_color(ui.debugPanel, color(0x111B24), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui.debugPanel, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(ui.debugPanel, 30, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.debugPanel, 18, LV_PART_MAIN);
     lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui.debugPanel, onScreenTouch, LV_EVENT_PRESSED, nullptr);
+    lv_obj_clear_flag(ui.debugPanel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(ui.debugPanel, LV_DIR_NONE);
+    lv_obj_set_scrollbar_mode(ui.debugPanel, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_event_cb(ui.debugPanel, onDebugGesture, LV_EVENT_GESTURE, nullptr);
 
     lv_obj_t* debugTitle = makeLabel(ui.debugPanel, "CREATURE LAB", &lv_font_montserrat_18, 0xEAF2EF);
-    lv_obj_set_width(debugTitle, 406);
-    lv_obj_set_pos(debugTitle, 0, 8);
+    lv_obj_set_width(debugTitle, 260);
+    lv_obj_set_pos(debugTitle, 0, 4);
+
+    ui.debugCloseButton = lv_button_create(ui.debugPanel);
+    lv_obj_set_size(ui.debugCloseButton, 96, 36);
+    lv_obj_set_pos(ui.debugCloseButton, 316, 0);
+    lv_obj_set_style_bg_color(ui.debugCloseButton, color(0x344451), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.debugCloseButton, 12, LV_PART_MAIN);
+    lv_obj_add_event_cb(ui.debugCloseButton, onDebugCloseClicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* closeLabel = makeLabel(ui.debugCloseButton, "BACK", &lv_font_montserrat_12, 0xEAF2EF);
+    lv_obj_center(closeLabel);
+
     ui.debugLabel = makeLabel(ui.debugPanel, "", &lv_font_montserrat_14, 0xBDE5D5);
-    lv_obj_set_width(ui.debugLabel, 406);
-    lv_obj_set_pos(ui.debugLabel, 0, 72);
+    lv_obj_set_width(ui.debugLabel, 430);
+    lv_obj_set_pos(ui.debugLabel, 0, 54);
     lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
     lv_label_set_long_mode(ui.debugLabel, LV_LABEL_LONG_WRAP);
-    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "SWIPE RIGHT TO RETURN", &lv_font_montserrat_12, 0x91AAA4);
-    lv_obj_set_width(debugHint, 406);
-    lv_obj_set_pos(debugHint, 0, 408);
+
+    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "TAP BACK TO RETURN", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_set_width(debugHint, 430);
+    lv_obj_set_pos(debugHint, 0, 420);
     refreshDebugPanel();
 }
 
@@ -319,6 +482,22 @@ void updateCreatureVisuals() {
     const bool curiousFace = reaction == Reaction::Curious
         || pet.emotions().value(Emotion::Curiosity) > 48.0F;
 
+    float bodyOffsetX = std::clamp(deviceRoll * 0.14F, -10.0F, 10.0F);
+    float bodyOffsetY = std::clamp(devicePitch * 0.12F, -9.0F, 9.0F);
+    const float hitElapsed = animationTime - lastHitAnimation;
+    if (hitElapsed >= 0.0F && hitElapsed < 0.72F) {
+        const float envelope = std::sin((hitElapsed / 0.72F) * 3.14159265F);
+        if (pet.enjoysSparring()) {
+            // Dodge first, then make a short counter-lunge.
+            if (hitElapsed < 0.20F) bodyOffsetX -= hitDirection * 24.0F * envelope;
+            else bodyOffsetX += hitDirection * 15.0F * envelope;
+            bodyOffsetY -= 5.0F * envelope;
+        } else {
+            bodyOffsetX -= hitDirection * 11.0F * envelope;
+            bodyOffsetY += 4.0F * envelope;
+        }
+    }
+
     float bodyX = 103.0F;
     float bodyY = 104.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     if (happyFace) bodyY -= std::abs(std::sin(phase * 8.0F)) * 8.0F * std::max(0.25F, reactionPower);
@@ -328,7 +507,8 @@ void updateCreatureVisuals() {
 
     const int bodyWidth = static_cast<int>(260.0F * (0.88F + genes.bodyWidth * 0.0024F));
     const int bodyHeight = static_cast<int>(232.0F * (0.88F + genes.bodyHeight * 0.0024F));
-    bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F;
+    bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
+    bodyY += bodyOffsetY;
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
     lv_obj_set_pos(ui.body, static_cast<int>(bodyX), static_cast<int>(bodyY));
 
@@ -458,6 +638,37 @@ void update(float deltaSeconds) {
     if (dt <= 0.0F) return;
 
     animationTime += dt;
+
+    const motion::State sensor = motion::state();
+    deviceRoll = sensor.rollDegrees;
+    devicePitch = sensor.pitchDegrees;
+
+    if (sensor.steps > lastMotionSteps) {
+        const std::uint32_t newSteps = sensor.steps - lastMotionSteps;
+        if (pet.registerSteps(newSteps)) setMessage("YOU FOUND SOMETHING!", 1.6F);
+        lastMotionSteps = sensor.steps;
+    }
+    if (sensor.shakeEvents > lastShakeEvents) {
+        pet.applyInteraction(Interaction::Shake);
+        lastShakeEvents = sensor.shakeEvents;
+    }
+    if (sensor.tiltEvents > lastTiltEvents) {
+        pet.applyInteraction(Interaction::Tilt);
+        lastTiltEvents = sensor.tiltEvents;
+    }
+    if (sensor.rotationEvents > lastRotationEvents) {
+        pet.applyInteraction(Interaction::Rotate);
+        lastRotationEvents = sensor.rotationEvents;
+    }
+
+    if (ui.stepsLabel != nullptr && lastDisplayedSteps != pet.stepsTaken()) {
+        char stepsText[40]{};
+        std::snprintf(stepsText, sizeof(stepsText), "STEPS %06lu",
+            static_cast<unsigned long>(pet.stepsTaken()));
+        lv_label_set_text(ui.stepsLabel, stepsText);
+        lastDisplayedSteps = pet.stepsTaken();
+    }
+
     float soundIntensity = 0.0F;
     float soundDuration = 0.0F;
     if (audio::consumeSoundEvent(soundIntensity, soundDuration)) {
