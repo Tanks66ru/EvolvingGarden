@@ -27,6 +27,31 @@ public:
         }
     }
     Reaction kind() const { return reaction_; }
+    float strength() const { return strength_; }
+    float duration() const { return duration_; }
+    float elapsed() const { return elapsed_; }
+
+    void restore(Reaction reaction, float strength, float duration,
+                 float elapsed, bool exaggerated) {
+        if (reaction == Reaction::None) {
+            reaction_ = Reaction::None;
+            strength_ = 0.0F;
+            duration_ = 0.0F;
+            elapsed_ = 0.0F;
+            exaggerated_ = false;
+            return;
+        }
+        reaction_ = reaction;
+        strength_ = clampPercent(strength);
+        duration_ = std::max(0.05F, duration);
+        elapsed_ = clampValue(elapsed, 0.0F, duration_);
+        exaggerated_ = exaggerated;
+        if (elapsed_ >= duration_) {
+            reaction_ = Reaction::None;
+            strength_ = 0.0F;
+            exaggerated_ = false;
+        }
+    }
     bool active() const { return reaction_ != Reaction::None; }
     bool exaggerated() const { return exaggerated_; }
     float progress() const {
