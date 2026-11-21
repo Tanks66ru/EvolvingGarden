@@ -1,34 +1,53 @@
 # EvolvingGarden
 
-A small creature-evolution simulator inspired by virtual pets and artificial selection.
+A small creature-evolution simulator inspired by virtual pets, procedural life and artificial selection.
 
-## Project direction
+## Current prototype: 0.2
 
-- One common ancestral organism; descendants inherit traits through a genome.
-- Mutations and environmental pressures shape later generations.
-- Personality affects individual behavior, not just displayed stats.
-- Feeding, care, and life stages influence development.
-- The simulation should run locally and offline first.
-- The PC simulator and future ESP32 firmware should share the same platform-independent simulation core.
+The desktop prototype now contains the first vertical slice of the creature simulation:
 
-## Planned structure
+- Six inherited personality traits, each in the range -100 to +100.
+- Eight emotional channels, plus mood and arousal.
+- Four basic needs: hunger, energy, social contact and boredom.
+- A lightweight action selector that responds to personality and needs.
+- Player interactions: feed, pet, novelty, loud sound and foreground attention.
+- A bounded significant-event journal.
+- Procedural 2D creature geometry generated from compact morphology genes.
+- A small automated test executable for the platform-independent simulation layer.
 
-| Directory | Responsibility |
-|---|---|
-| `core/` | Shared domain types, genome rules, mutation and evolution logic |
-| `simulation/` | Time, needs, behavior, life-cycle and world simulation |
-| `creatures/` | Creature definitions, traits, phenotype and lineage |
-| `renderer/` | PC visualization and presentation |
-| `assets/` | Sprites, animations, fonts and audio |
-| `data/` | Tunable game data such as foods, trait tables and species parameters |
-| `firmware/` | Future ESP32-S3 application |
-| `tests/` | Automated tests for deterministic game logic |
-| `third_party/` | External dependencies |
-| `tools/` | Development and content-pipeline utilities |
-| `docs/` | Design notes, architecture and technical documentation |
+## Controls
 
-The structure is intentionally a starting point. New modules should be added when the implementation needs them, not just because folders are cheap.
+- F: Feed
+- P: Pet
+- N: Present an unusual stimulus
+- S: Simulate a loud sound
+- B: Bring the creature to the main screen
+- H: Open or close the life chronicle
+- Space: Pause or resume simulation
+- Backspace: Return from the chronicle
 
-## Development
+## Build
 
-The desktop simulator is the first target. The embedded target comes after the simulation rules are stable and can be tested independently of the renderer.
+The desktop application uses CMake, C++20 and Raylib 5.5.
+
+Run these commands in Developer PowerShell:
+
+    cmake -S . -B build -G Ninja
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+
+Run build/EvolvingGarden.exe after building.
+
+## Architecture direction
+
+- core/ contains platform-independent types and common rules.
+- creatures/ contains genome data.
+- simulation/ contains needs, emotions, memory and behavior.
+- renderer/ turns the phenotype into procedural geometry and presents the desktop prototype.
+- firmware/ will eventually provide the ESP32-S3 target.
+
+The simulation layer must remain independent of Raylib so it can be reused by future firmware. The desktop renderer is a development and inspection tool, not a copy of the small device interface.
+
+## Current limitations
+
+This is a first iteration, not a finished artificial-life system. The environment is currently represented by a few test interactions, the behavior model is intentionally small, and morphology is a compact procedural 2D shape. Genetic inheritance, real mutation rules, other creatures, save files and physical sensor input are not implemented yet.
