@@ -188,12 +188,15 @@ void onBodyTouched(lv_event_t*) {
 void createCreature(lv_obj_t* parent) {
     // Appendages are created first so the body is drawn over their roots.
     ui.appendages[0] = lv_obj_create(parent);
+    lv_obj_add_flag(ui.appendages[0], LV_OBJ_FLAG_GESTURE_BUBBLE);
     makeFlatObject(ui.appendages[0], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[1] = lv_obj_create(parent);
+    lv_obj_add_flag(ui.appendages[1], LV_OBJ_FLAG_GESTURE_BUBBLE);
     makeFlatObject(ui.appendages[1], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[2] = lv_obj_create(parent);
+    lv_obj_add_flag(ui.appendages[2], LV_OBJ_FLAG_GESTURE_BUBBLE);
     makeFlatObject(ui.appendages[2], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.body = lv_obj_create(parent);
@@ -252,6 +255,7 @@ void createUi() {
     createCreature(screen);
 
     ui.status = makeLabel(screen, "WANDERING", &lv_font_montserrat_14, 0xBDE5D5);
+    lv_obj_add_flag(ui.status, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_set_width(ui.status, 420);
     lv_obj_set_pos(ui.status, 23, 354);
 
