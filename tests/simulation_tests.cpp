@@ -180,6 +180,32 @@ int main() {
         assert(reaction.exaggerated());
     }
 
+    {
+        CreatureSimulation original;
+        original.registerSteps(27);
+        original.applyInteraction(Interaction::Feed);
+        original.applyInteraction(Interaction::Pet);
+        advance(original, 2.0F);
+
+        const auto snapshot = original.persistentState();
+        CreatureSimulation restored;
+        assert(restored.restorePersistentState(snapshot));
+        assert(restored.stepsTaken() == 27);
+        assert(restored.genome().seed == original.genome().seed);
+        assert(restored.affectionToPlayer() == original.affectionToPlayer());
+        assert(restored.needs().hunger == original.needs().hunger);
+        assert(restored.needs().energy == original.needs().energy);
+        assert(restored.emotions().value(Emotion::Joy)
+            == original.emotions().value(Emotion::Joy));
+        assert(restored.emotions().value(Emotion::Affection)
+            == original.emotions().value(Emotion::Affection));
+        assert(restored.memories().size() == original.memories().size());
+        assert(restored.action() == original.action());
+
+        auto invalid = snapshot;
+        invalid.version += 1U;
+        assert(!restored.restorePersistentState(invalid));
+    }
     std::cout << "All EvolvingGarden simulation tests passed.\n";
     return 0;
 }
