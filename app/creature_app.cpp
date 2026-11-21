@@ -200,6 +200,8 @@ void refreshDebugPanel() {
     std::snprintf(text, sizeof(text),
         "MICROPHONE   %s   %u%%\n"
         "SPEAKER      %s\n"
+        "NVS          %s\n"
+        "SAVE         %s\n"
         "MOTION       %s\n"
         "ORIENTATION  %s\n"
         "SCREEN       %s\n\n"
@@ -219,6 +221,8 @@ void refreshDebugPanel() {
         audio::microphoneReady() ? "READY" : "OFF",
         static_cast<unsigned>(audio::microphoneLevelPercent()),
         audio::speakerReady() ? "READY" : "OFF",
+        storageReady ? "READY" : "OFF",
+        saveRequested ? "PENDING" : "CLEAN",
         sensor.ready ? "READY" : "OFF",
         sensor.orientationCalibrated ? "CALIBRATED" : "HOLD FLAT",
         sensor.screenSleeping ? "SLEEPING" : "AWAKE",
