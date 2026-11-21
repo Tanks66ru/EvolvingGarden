@@ -152,6 +152,7 @@ void updatePersistence(float dt) {
             secondsSinceSave = 0.0F;
         } else {
             // Keep the request pending and retry after the normal throttle interval.
+            saveInterval = 0.0F;
             secondsSinceSave = 0.0F;
         }
     }
