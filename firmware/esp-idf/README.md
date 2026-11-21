@@ -13,6 +13,14 @@ Target: Waveshare ESP32-S3-Touch-AMOLED-1.75C, 466 x 466 AMOLED.
 - The built-in speaker plays a synthesized cue for each reaction and action-button press.
 - Optional WAV files replace synthesized sounds.
 
+## Shared application boundary
+
+The creature interface and its frame update loop live in `app/creature_app.cpp`. This source is compiled directly into the ESP-IDF firmware and depends on LVGL plus the platform-neutral audio contract in `platform/audio.hpp`.
+
+The ESP32 entry point in `firmware/esp-idf/main/main.cpp` is responsible for starting the Waveshare display/input driver, initializing the board audio backend, and scheduling the shared application. Board-specific BSP and codec calls stay outside the shared UI.
+
+The next development step is a PC host for this same LVGL application. It will replace the board drivers with desktop display, mouse/touch and audio backends; it will not contain a second copy of the creature UI.
+
 ## Custom sounds
 
 Place optional files in the repository folder assets/sounds:

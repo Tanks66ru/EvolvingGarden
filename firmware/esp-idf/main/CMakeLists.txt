@@ -4,6 +4,7 @@ idf_component_register(
     SRCS
         "main.cpp"
         "audio_controller.cpp"
+        "${EVOLVING_GARDEN_ROOT}/app/creature_app.cpp"
     INCLUDE_DIRS
         "."
         "${EVOLVING_GARDEN_ROOT}"

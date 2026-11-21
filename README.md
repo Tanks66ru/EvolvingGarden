@@ -76,10 +76,12 @@ Run build/EvolvingGarden.exe after building.
 - core/ contains platform-independent types and common rules.
 - creatures/ contains genome data.
 - simulation/ contains needs, emotions, reactions, memory and behavior.
-- renderer/ turns the phenotype into procedural geometry and presents the desktop prototype.
-- firmware/ will eventually provide the ESP32-S3 target.
+- app/ contains the shared LVGL creature interface and its application loop.
+- platform/audio.hpp defines the audio contract implemented by each platform.
+- firmware/ contains ESP32 startup and the Waveshare-specific display, touch and audio integration.
+- renderer/ remains the existing Raylib laboratory for inspecting the simulation; it is not a second implementation of the device UI.
 
-The simulation layer must remain independent of Raylib so it can be reused by future firmware. The desktop renderer is a development and inspection tool, not a copy of the small device interface.
+The LVGL application is shared between the ESP32 target and the planned PC simulator. Only the display/input/audio backends and platform startup should differ. The PC simulator will use LVGL's SDL driver, not a separately recreated interface.
 
 ## Current limitations
 
