@@ -38,6 +38,40 @@ public:
     static constexpr float SignificantEventCooldownSeconds = 600.0F;
     static constexpr float ForegroundBondCooldownSeconds = 600.0F;
     static constexpr float LoudSoundCooldownSeconds = 1.5F;
+    static constexpr std::uint32_t PersistentStateVersion = 1U;
+
+    struct PersistentState {
+        std::uint32_t version = PersistentStateVersion;
+        Genome genome{};
+        CreatureNeeds needs{};
+        std::array<float, EmotionCount> emotionValues{};
+        float arousal = 0.0F;
+        std::array<MemoryEvent, MemoryJournal::Capacity> memoryEvents{};
+        std::uint32_t memoryCount = 0;
+        Reaction reaction = Reaction::None;
+        float reactionStrength = 0.0F;
+        float reactionDuration = 0.0F;
+        float reactionElapsed = 0.0F;
+        bool reactionExaggerated = false;
+        Action action = Action::Idle;
+        std::array<float, static_cast<std::size_t>(Interaction::Count)> cooldowns{};
+        float mood = 0.0F;
+        float affectionToPlayer = 8.0F;
+        float simulationTime = 0.0F;
+        float actionTimer = 0.0F;
+        float lastSignificantEventTime = 0.0F;
+        float lastForegroundRewardTime = 0.0F;
+        float soundExposure = 0.0F;
+        float nextAutonomousReactionTime = 0.0F;
+        std::uint32_t noveltyCount = 0;
+        std::uint32_t foregroundVisits = 0;
+        std::uint32_t stepCount = 0;
+        std::int32_t lastBondMilestone = 0;
+        bool hasSignificantEvent = false;
+        bool hasForegroundReward = false;
+        bool inForeground = false;
+        std::uint32_t randomState = 0xA341316CU;
+    };
 
     explicit CreatureSimulation(Genome genome = makeDefaultGenome())
         : genome_(genome), random_(genome.seed) {
@@ -58,6 +92,84 @@ public:
     bool isInForeground() const { return inForeground_; }
     std::uint32_t stepsTaken() const { return stepCount_; }
     bool enjoysSparring() const { return genome_.personality.friendliness <= -20; }
+
+    PersistentState persistentState() const {
+        PersistentState state{};
+        state.genome = genome_;
+        state.needs = needs_;
+        state.emotionValues = emotions_.values();
+        state.arousal = emotions_.arousal();
+        state.memoryEvents = memories_.entries();
+        state.memoryCount = static_cast<std::uint32_t>(memories_.size());
+        state.reaction = reaction_.kind();
+        state.reactionStrength = reaction_.strength();
+        state.reactionDuration = reaction_.duration();
+        state.reactionElapsed = reaction_.elapsed();
+        state.reactionExaggerated = reaction_.exaggerated();
+        state.action = action_;
+        state.cooldowns = cooldowns_;
+        state.mood = mood_;
+        state.affectionToPlayer = affectionToPlayer_;
+        state.simulationTime = simulationTime_;
+        state.actionTimer = actionTimer_;
+        state.lastSignificantEventTime = lastSignificantEventTime_;
+        state.lastForegroundRewardTime = lastForegroundRewardTime_;
+        state.soundExposure = soundExposure_;
+        state.nextAutonomousReactionTime = nextAutonomousReactionTime_;
+        state.noveltyCount = noveltyCount_;
+        state.foregroundVisits = foregroundVisits_;
+        state.stepCount = stepCount_;
+        state.lastBondMilestone = lastBondMilestone_;
+        state.hasSignificantEvent = hasSignificantEvent_;
+        state.hasForegroundReward = hasForegroundReward_;
+        state.inForeground = inForeground_;
+        state.randomState = random_.state();
+        return state;
+    }
+
+    bool restorePersistentState(const PersistentState& state) {
+        if (state.version != PersistentStateVersion
+            || state.memoryCount > MemoryJournal::Capacity
+            || static_cast<unsigned>(state.action) > static_cast<unsigned>(Action::Forage)
+            || static_cast<unsigned>(state.reaction) > static_cast<unsigned>(Reaction::Disgusted)) {
+            return false;
+        }
+
+        genome_ = state.genome;
+        genome_.normalize();
+        needs_.hunger = clampPercent(state.needs.hunger);
+        needs_.energy = clampPercent(state.needs.energy);
+        needs_.social = clampPercent(state.needs.social);
+        needs_.boredom = clampPercent(state.needs.boredom);
+        for (std::size_t i = 0; i < EmotionCount; ++i) {
+            emotions_.set(static_cast<Emotion>(i), state.emotionValues[i]);
+        }
+        emotions_.setArousal(state.arousal);
+        memories_.restore(state.memoryEvents, state.memoryCount);
+        reaction_.restore(state.reaction, state.reactionStrength,
+            state.reactionDuration, state.reactionElapsed, state.reactionExaggerated);
+        action_ = state.action;
+        for (std::size_t i = 0; i < cooldowns_.size(); ++i) {
+            cooldowns_[i] = clampValue(state.cooldowns[i], 0.0F, 600.0F);
+        }
+        mood_ = clampValue(state.mood, -100.0F, 100.0F);
+        affectionToPlayer_ = clampPercent(state.affectionToPlayer);
+        simulationTime_ = std::max(0.0F, state.simulationTime);
+        actionTimer_ = clampValue(state.actionTimer, 0.0F, 60.0F);
+        lastSignificantEventTime_ = std::max(0.0F, state.lastSignificantEventTime);
+        lastForegroundRewardTime_ = std::max(0.0F, state.lastForegroundRewardTime);
+        soundExposure_ = clampValue(state.soundExposure, 0.0F, 3.0F);
+        nextAutonomousReactionTime_ = std::max(0.0F, state.nextAutonomousReactionTime);
+        noveltyCount_ = state.noveltyCount;
+        foregroundVisits_ = state.foregroundVisits;
+        stepCount_ = state.stepCount;
+        lastBondMilestone_ = clampValue(state.lastBondMilestone, 0, 100);
+        hasSignificantEvent_ = state.hasSignificantEvent;
+        hasForegroundReward_ = state.hasForegroundReward;
+        inForeground_ = state.inForeground;
+        random_.setState(state.randomState);
+        return true;
+    }
 
     // Walking-like movement is supplied by the physical sensor layer.
     // Every ten real steps produces a discovery independently of UI cooldowns.
