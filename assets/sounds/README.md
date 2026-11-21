@@ -4,8 +4,8 @@ Optional WAV files placed here replace the built-in synthesized cues.
 
 | Filename | Cue |
 | --- | --- |
-| button_click.wav
-- hit_impact.wav (optional impact thump) | Action button |
+| button_click.wav | Button / action button |
+| hit_impact.wav | Impact thump (optional) |
 | reaction_happy.wav | Happy |
 | reaction_sad.wav | Sad |
 | reaction_angry.wav | Angry |
