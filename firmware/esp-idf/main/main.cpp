@@ -270,7 +270,7 @@ void createUi() {
     lv_obj_add_flag(ui.actionButton, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(ui.actionButton, onActionClicked, LV_EVENT_CLICKED, nullptr);
 
-    ui.actionLabel = makeLabel(ui.actionButton, "PET", &lv_font_montserrat_18, 0x14252C);
+    ui.actionLabel = makeLabel(ui.actionButton, "PET   < >", &lv_font_montserrat_18, 0x14252C);
     lv_obj_center(ui.actionLabel);
     lv_obj_add_flag(ui.actionLabel, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
