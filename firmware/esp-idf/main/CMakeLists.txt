@@ -6,6 +6,7 @@ idf_component_register(
         "audio_controller.cpp"
         "${EVOLVING_GARDEN_ROOT}/app/creature_app.cpp"
         "${EVOLVING_GARDEN_ROOT}/platform/esp32/motion.cpp"
+        "${EVOLVING_GARDEN_ROOT}/platform/esp32/persistence.cpp"
     INCLUDE_DIRS
         "."
         "${EVOLVING_GARDEN_ROOT}"
@@ -13,6 +14,8 @@ idf_component_register(
         spiffs
         esp_codec_dev
         qmi8658
+        nvs_flash
+        esp_driver_gpio
 )
 
 spiffs_create_partition_image(
