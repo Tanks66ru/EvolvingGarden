@@ -87,8 +87,8 @@ This is still a prototype. The environment is represented by test interactions, 
 
 ## ESP32-S3 firmware prototype
 
-A separate ESP-IDF application now targets the Waveshare ESP32-S3-Touch-AMOLED-1.75C. It uses the official Waveshare managed BSP and LVGL 9, and reuses the same simulation/genome code as the desktop prototype.
+A separate ESP-IDF application targets the Waveshare ESP32-S3-Touch-AMOLED-1.75C and reuses the shared simulation/genome code.
 
-The first hardware milestone displays one animated procedural pet, supports touch interaction (pet, feed, discover), and reuses the shared emotions, reactions, needs, cooldowns, and personality logic. It does not yet read the microphone or QMI8658 motion sensor.
+The hardware UI has one large action button (PET / FEED / DISCOVER), swipe navigation, and a live debug panel. The onboard microphones detect sound bursts and the speaker plays reaction cues. Optional PCM WAV files can replace the synthesized sounds.
 
-See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for setup, build, and flashing instructions. This target has not yet been validated on the user's physical board.
+See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for setup, sound format, build, and flashing instructions. The updated firmware still requires a fresh local build and hardware verification.
