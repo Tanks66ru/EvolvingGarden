@@ -6,6 +6,7 @@ namespace evolvinggarden::audio {
 
 enum class Cue : std::uint8_t {
     Button,
+    Hit,
     Happy,
     Sad,
     Angry,
