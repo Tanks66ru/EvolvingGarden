@@ -189,8 +189,23 @@ void outputTask(void*) {
 void inputTask(void*) {
     std::int16_t samples[CaptureSamples]{};
     float noiseFloor = 180.0F;
-    float peak = 0.0F;
+    float peakRms = 0.0F;
+    std::uint32_t eventSamples = 0;
     int loudFrames = 0;
+
+    auto publishEvent = [&]() {
+        if (loudFrames < 2) return;
+        const float duration = std::min(3.0F,
+            static_cast<float>(eventSamples) / static_cast<float>(SampleRate));
+        if (duration < 0.03F) return;
+        const float threshold = std::max(900.0F, noiseFloor * 3.0F + 450.0F);
+        const float intensity = std::clamp(
+            0.20F + (peakRms - threshold) / (threshold * 3.5F), 0.12F, 1.0F);
+        eventIntensity.store(intensity);
+        eventDuration.store(duration);
+        soundPending.store(true);
+    };
+
     for (;;) {
         const auto result = esp_codec_dev_read(mic, samples, static_cast<int>(sizeof(samples)));
         if (result != ESP_CODEC_DEV_OK) {
@@ -210,28 +225,37 @@ void inputTask(void*) {
         // Ignore playback captured by the board's own microphones.
         if (playing.load()) {
             loudFrames = 0;
-            peak = 0.0F;
+            eventSamples = 0;
+            peakRms = 0.0F;
             continue;
         }
 
         const float threshold = std::max(900.0F, noiseFloor * 3.0F + 450.0F);
         if (rms > threshold) {
             ++loudFrames;
-            peak = std::max(peak, rms);
-            if (loudFrames >= 2) {
-                eventIntensity.store(std::clamp(
-                    0.20F + (peak - threshold) / (threshold * 3.5F), 0.12F, 1.0F));
-                eventDuration.store(std::min(1.0F,
-                    static_cast<float>(loudFrames * CaptureSamples) / SampleRate));
-                soundPending.store(true);
+            eventSamples += static_cast<std::uint32_t>(CaptureSamples);
+            peakRms = std::max(peakRms, rms);
+
+            // Emit long continuous sounds in bounded chunks.
+            if (eventSamples >= SampleRate * 3U) {
+                publishEvent();
                 loudFrames = 0;
-                peak = 0.0F;
+                eventSamples = 0;
+                peakRms = 0.0F;
                 vTaskDelay(pdMS_TO_TICKS(180));
             }
         } else {
+            // A short quiet gap closes the current sound event.
+            if (loudFrames >= 2) {
+                publishEvent();
+                vTaskDelay(pdMS_TO_TICKS(180));
+            }
             loudFrames = 0;
-            peak = 0.0F;
-            if (rms < threshold * 1.35F) noiseFloor = noiseFloor * 0.97F + rms * 0.03F;
+            eventSamples = 0;
+            peakRms = 0.0F;
+            if (rms < threshold * 1.35F) {
+                noiseFloor = noiseFloor * 0.97F + rms * 0.03F;
+            }
         }
     }
 }
