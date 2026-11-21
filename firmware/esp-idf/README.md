@@ -28,7 +28,7 @@ The step detector is a software heuristic based on accelerometer pulses and a co
 
 ## Save data
 
-A versioned simulation snapshot is stored in ESP-IDF NVS. It includes the genome, needs, emotions, memory journal, reaction, action, cooldowns, relationship, simulation timers, progression counters, random-generator state and lifetime step count. Interaction/step changes request a throttled save, and a periodic checkpoint stores passive need and mood changes. Flash writes are rate-limited to avoid wearing the storage unnecessarily.
+A versioned simulation snapshot is stored in ESP-IDF NVS. It includes the genome, needs, emotions, memory journal, reaction, action, cooldowns, relationship, simulation timers, progression counters, random-generator state and lifetime step count. Interaction/step changes request a throttled save, and a periodic checkpoint stores passive need and mood changes. Flash writes are rate-limited to no more than one interaction save every three seconds to avoid wearing the storage unnecessarily.
 
 
 ## Custom sounds
