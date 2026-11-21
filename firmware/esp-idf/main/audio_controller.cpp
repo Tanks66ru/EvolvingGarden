@@ -41,6 +41,7 @@ struct Tone { std::uint16_t hz; std::uint16_t ms; std::uint16_t gap; };
 const char* pathFor(Cue cue) {
     switch (cue) {
     case Cue::Button: return "/spiffs/button_click.wav";
+    case Cue::Hit: return "/spiffs/hit_impact.wav";
     case Cue::Happy: return "/spiffs/reaction_happy.wav";
     case Cue::Sad: return "/spiffs/reaction_sad.wav";
     case Cue::Angry: return "/spiffs/reaction_angry.wav";
@@ -157,6 +158,7 @@ void playTones(const Tone* tones, std::size_t toneCount) {
 
 void fallback(Cue cue) {
     static const Tone button[] = {{1250, 34, 0}};
+    static const Tone hit[] = {{115, 42, 0}, {78, 48, 0}};
     static const Tone happy[] = {{660, 55, 8}, {880, 65, 8}, {1175, 90, 0}};
     static const Tone sad[] = {{440, 110, 18}, {349, 150, 0}};
     static const Tone angry[] = {{190, 70, 12}, {155, 80, 0}};
@@ -167,6 +169,7 @@ void fallback(Cue cue) {
     static const Tone disgusted[] = {{310, 60, 8}, {250, 75, 8}, {180, 95, 0}};
     switch (cue) {
     case Cue::Button: playTones(button, 1); break;
+    case Cue::Hit: playTones(hit, 2); break;
     case Cue::Happy: playTones(happy, 3); break;
     case Cue::Sad: playTones(sad, 2); break;
     case Cue::Angry: playTones(angry, 2); break;
