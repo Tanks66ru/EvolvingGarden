@@ -3,6 +3,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_codec_dev.h"
 #include "esp_log.h"
+#include "esp_err.h"
 #include "esp_spiffs.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
