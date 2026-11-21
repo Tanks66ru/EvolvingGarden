@@ -94,30 +94,36 @@ void drawRecentMemory(const CreatureSimulation& creature) {
     if (journal.size() > 0)
         DrawText(eventTitle(journal.at(journal.size() - 1).type).data(), 500, 676, 12, Accent);
 }
-void drawChronicle(const CreatureSimulation& creature) {
+void drawChronicle(const CreatureSimulation& creature, int scrollOffset) {
     DrawRectangleRounded({24.0F, 100.0F, 1132.0F, 590.0F}, 0.025F, 10, Panel);
     DrawText("LIFE CHRONICLE", 50, 126, 20, TextPrimary);
-    DrawText("Significant events. The journal has a fixed memory limit.", 50, 158, 13, TextMuted);
+    DrawText("Significant events. Use UP/DOWN to browse older and newer entries.", 50, 158, 13, TextMuted);
     const auto& journal = creature.memories();
     if (journal.size() == 0) {
         DrawText("No significant events yet.", 50, 220, 16, TextMuted);
         return;
     }
-    int y = 205;
-    for (std::size_t reverseIndex = journal.size(); reverseIndex > 0; --reverseIndex) {
-        const MemoryEvent& event = journal.at(reverseIndex - 1);
-        DrawRectangleRounded({48.0F, static_cast<float>(y), 1080.0F, 62.0F}, 0.08F, 8, PanelLight);
+    constexpr int VisibleEntries = 7;
+    const int maxOffset = std::max(0, static_cast<int>(journal.size()) - VisibleEntries);
+    const int safeOffset = std::clamp(scrollOffset, 0, maxOffset);
+    const int endIndex = static_cast<int>(journal.size()) - safeOffset;
+    const int startIndex = std::max(0, endIndex - VisibleEntries);
+    int y = 198;
+    for (int index = endIndex - 1; index >= startIndex; --index) {
+        const MemoryEvent& event = journal.at(static_cast<std::size_t>(index));
+        DrawRectangleRounded({48.0F, static_cast<float>(y), 1080.0F, 58.0F}, 0.08F, 8, PanelLight);
         const int day = static_cast<int>(event.timestampSeconds / 86400U) + 1;
         const int totalMinutes = static_cast<int>(event.timestampSeconds / 60U);
         const int hours = (totalMinutes / 60) % 24;
         const int minutes = totalMinutes % 60;
-        DrawText(TextFormat("DAY %d  %02d:%02d", day, hours, minutes), 66, y + 9, 10, TextMuted);
-        DrawText(eventTitle(event.type).data(), 220, y + 8, 15, TextPrimary);
-        DrawText(eventDescription(event.type).data(), 220, y + 32, 12, TextMuted);
-        DrawText(TextFormat("IMPORTANCE %d", event.significance), 982, y + 20, 10, Accent);
-        y += 73;
-        if (y > 640) break;
+        DrawText(TextFormat("DAY %d  %02d:%02d", day, hours, minutes), 66, y + 8, 10, TextMuted);
+        DrawText(eventTitle(event.type).data(), 220, y + 7, 15, TextPrimary);
+        DrawText(eventDescription(event.type).data(), 220, y + 31, 12, TextMuted);
+        DrawText(TextFormat("IMPORTANCE %d", event.significance), 982, y + 19, 10, Accent);
+        y += 68;
     }
+    DrawText(TextFormat("Showing %d-%d of %d",
+        startIndex + 1, endIndex, static_cast<int>(journal.size())), 50, 675, 11, TextMuted);
 }
 void drawControls(bool chronicleOpen, bool paused) {
     DrawText("F  FEED", 30, 715, 12, TextPrimary);
@@ -127,7 +133,7 @@ void drawControls(bool chronicleOpen, bool paused) {
     DrawText("B  MAIN SCREEN", 475, 715, 12, TextPrimary);
     DrawText("H  CHRONICLE", 635, 715, 12, TextPrimary);
     DrawText(paused ? "SPACE  RESUME" : "SPACE  PAUSE", 795, 715, 12, Accent);
-    if (chronicleOpen) DrawText("BACKSPACE  RETURN", 965, 715, 12, TextPrimary);
+    if (chronicleOpen) DrawText("UP/DOWN SCROLL  |  BACKSPACE RETURN", 920, 715, 11, TextPrimary);
 }
 }
 int main() {
@@ -138,10 +144,13 @@ int main() {
     float elapsedTime = 0.0F;
     bool chronicleOpen = false;
     bool paused = false;
+    int chronicleScroll = 0;
     while (!WindowShouldClose()) {
         const float frameTime = GetFrameTime();
-        if (IsKeyPressed(KEY_H)) chronicleOpen = !chronicleOpen;
+        if (IsKeyPressed(KEY_H)) { chronicleOpen = !chronicleOpen; chronicleScroll = 0; }
         if (IsKeyPressed(KEY_BACKSPACE)) chronicleOpen = false;
+        if (chronicleOpen && IsKeyPressed(KEY_UP)) ++chronicleScroll;
+        if (chronicleOpen && IsKeyPressed(KEY_DOWN)) chronicleScroll = std::max(0, chronicleScroll - 1);
         if (IsKeyPressed(KEY_SPACE)) paused = !paused;
         if (!chronicleOpen) {
             if (IsKeyPressed(KEY_F)) creature.applyInteraction(Interaction::Feed);
@@ -160,7 +169,7 @@ int main() {
         DrawText("BEHAVIOR & PROCEDURAL ORGANISM PROTOTYPE  /  0.2", 30, 58, 12, TextMuted);
         DrawText(paused ? "PAUSED" : "SIMULATING", 1010, 35, 12,
             paused ? Color{221, 174, 105, 255} : Accent);
-        if (chronicleOpen) drawChronicle(creature);
+        if (chronicleOpen) drawChronicle(creature, chronicleScroll);
         else {
             drawPersonalityPanel(creature);
             drawHabitat(creature, elapsedTime);
