@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <iterator>
 #include <vector>
 
 namespace evolvinggarden::audio {
@@ -22,7 +23,6 @@ SDL_AudioDeviceID captureDevice = 0;
 SDL_AudioSpec playbackFormat{};
 SDL_AudioSpec captureFormat{};
 
-std::atomic<bool> audioSubsystemReady{false};
 std::atomic<bool> soundPending{false};
 std::atomic<float> eventIntensity{0.0F};
 std::atomic<float> eventDuration{0.0F};
@@ -183,7 +183,6 @@ void initialize() {
         return;
     }
 
-    audioSubsystemReady.store(true);
     const bool speakerOnline = openPlayback();
     const bool microphoneOnline = openCapture();
 

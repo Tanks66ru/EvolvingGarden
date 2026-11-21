@@ -2,10 +2,10 @@
 
 #include <SDL.h>
 #include <lvgl.h>
-#include "drivers/sdl/lv_sdl_keyboard.h"
-#include "drivers/sdl/lv_sdl_mouse.h"
-#include "drivers/sdl/lv_sdl_mousewheel.h"
-#include "drivers/sdl/lv_sdl_window.h"
+#include "src/drivers/sdl/lv_sdl_keyboard.h"
+#include "src/drivers/sdl/lv_sdl_mouse.h"
+#include "src/drivers/sdl/lv_sdl_mousewheel.h"
+#include "src/drivers/sdl/lv_sdl_window.h"
 
 #include "app/creature_app.hpp"
 #include "platform/audio.hpp"
@@ -49,12 +49,17 @@ int main() {
     lv_sdl_window_set_resizeable(display, false);
     lv_sdl_window_set_zoom(display, 1.40F);
 
-    if (lv_sdl_mouse_create() == nullptr
+    lv_indev_t* mouse = lv_sdl_mouse_create();
+    if (mouse == nullptr
         || lv_sdl_mousewheel_create() == nullptr
         || lv_sdl_keyboard_create() == nullptr) {
         std::fprintf(stderr, "Failed to initialize an LVGL SDL input device.\n");
         return EXIT_FAILURE;
     }
+
+    // Match the physical touchscreen gesture thresholds used by the firmware.
+    lv_indev_set_gesture_min_distance(mouse, 42);
+    lv_indev_set_gesture_min_velocity(mouse, 100);
 
     evolvinggarden::audio::initialize();
 
