@@ -161,7 +161,7 @@ void showDebugPanel() {
     if (ui.debugPanel == nullptr) return;
     refreshDebugPanel();
     lv_obj_clear_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_foreground(ui.debugPanel);
+    lv_obj_move_to_index(ui.debugPanel, -1);
 }
 void hideDebugPanel() {
     if (ui.debugPanel != nullptr) lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
