@@ -146,10 +146,14 @@ void updatePersistence(float dt) {
 
     // Keep flash writes sparse, but flush interaction and step changes promptly.
     if ((saveRequested && secondsSinceSave >= 10.0F) || saveInterval >= 60.0F) {
-        (void)persistence::save(pet);
-        saveRequested = false;
-        saveInterval = 0.0F;
-        secondsSinceSave = 0.0F;
+        if (persistence::save(pet)) {
+            saveRequested = false;
+            saveInterval = 0.0F;
+            secondsSinceSave = 0.0F;
+        } else {
+            // Keep the request pending and retry after the normal throttle interval.
+            secondsSinceSave = 0.0F;
+        }
     }
 }
 
