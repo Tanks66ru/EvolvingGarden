@@ -6,7 +6,10 @@ A creature-evolution and virtual-pet project for the Waveshare ESP32-S3-Touch-AM
 
 - The large **FEED** button feeds the creature. It is the only gameplay button.
 - A short tap on the creature is a hit. Creatures with low friendliness enjoy sparring; friendly creatures dislike being hit.
-- Draw circles around the creature with your finger to pet it. Each completed circle can trigger another petting response.
+- Draw a circle around the creature in either direction to pet it. Each completed circle can trigger another response.
+- Tap the creature to hit it. A short impact flash, expanding ring, squash/recoil animation and impact sound make the strike clearer.
+- Press the physical **BOOT** side button to open or close the diagnostic LAB panel. The on-screen LAB shortcut has been removed.
+- Creature progress is saved to ESP32 NVS: steps, genome, needs, emotions, memories, relationship and behavior state.
 - Walking while carrying the board increments the step counter. Every ten steps can produce a discovery.
 - Shake the board for a surprise/play response.
 - Tilt the board to trigger a balance/curiosity response.
@@ -31,6 +34,6 @@ The LVGL creature interface is implemented once in `app/creature_app.cpp` and is
 
 ## Build and flash
 
-See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for ESP-IDF setup, build and flashing instructions.
+See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for ESP-IDF setup, build and flashing instructions. The architecture and interaction reference is in [HOW_IT_WORKS.md](HOW_IT_WORKS.md).
 
 The QMI8658 is initialized through the I2C bus already created by the board BSP. The firmware does not initialize a second I2C controller on the same pins.
