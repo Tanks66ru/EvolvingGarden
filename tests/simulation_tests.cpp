@@ -5,6 +5,12 @@
 #include <cstdint>
 #include <iostream>
 using namespace evolvinggarden;
+
+static void advance(CreatureSimulation& creature, float seconds) {
+    const int steps = static_cast<int>(seconds / 0.25F);
+    for (int i = 0; i < steps; ++i) creature.update(0.25F);
+}
+
 int main() {
     {
         Genome genome = makeDefaultGenome();
@@ -15,15 +21,17 @@ int main() {
         assert(genome.personality.friendliness == 100);
         assert(genome.personality.curiosity == -100);
         assert(genome.morphology.appendageCount == 6);
+        assert(genome.morphology.eyeSize == 62);
     }
     {
         MemoryJournal journal;
-        assert(!journal.add(MemoryEvent{0, EventType::Fed, 0, 10, 0}));
+        assert(!journal.add(MemoryEvent{0, EventType::Fed, 0, 74, 0}));
         for (std::uint32_t i = 0; i < MemoryJournal::Capacity + 5; ++i)
-            journal.add(MemoryEvent{i, EventType::NoveltyDiscovered, 20, 50, 0});
+            assert(journal.add(MemoryEvent{i, EventType::NoveltyDiscovered, 20, 85, 0}));
         assert(journal.size() == MemoryJournal::Capacity);
         assert(journal.at(0).timestampSeconds == 5);
-        assert(journal.at(MemoryJournal::Capacity - 1).timestampSeconds == MemoryJournal::Capacity + 4);
+        assert(journal.at(MemoryJournal::Capacity - 1).timestampSeconds
+            == MemoryJournal::Capacity + 4);
     }
     {
         Genome curiousGenome = makeDefaultGenome();
@@ -34,18 +42,68 @@ int main() {
         cautiousGenome.personality.optimism = -100;
         CreatureSimulation curious(curiousGenome);
         CreatureSimulation cautious(cautiousGenome);
+        const float curiousBondBefore = curious.affectionToPlayer();
+        const float cautiousBondBefore = cautious.affectionToPlayer();
         curious.applyInteraction(Interaction::Novelty);
         cautious.applyInteraction(Interaction::Novelty);
-        assert(curious.affectionToPlayer() > cautious.affectionToPlayer());
-        assert(curious.emotions().value(Emotion::Curiosity) > cautious.emotions().value(Emotion::Curiosity));
+        assert(curious.affectionToPlayer() - curiousBondBefore
+            > cautious.affectionToPlayer() - cautiousBondBefore);
+        assert(curious.emotions().value(Emotion::Curiosity)
+            > cautious.emotions().value(Emotion::Curiosity));
+        assert(curious.reaction().kind() == Reaction::Curious);
     }
     {
         CreatureSimulation creature;
         assert(creature.memories().size() == 1);
         assert(creature.memories().at(0).type == EventType::Birth);
-        creature.applyInteraction(Interaction::BroughtToForeground);
-        assert(creature.memories().size() >= 2);
+        const float bondBefore = creature.affectionToPlayer();
+
+        assert(creature.applyInteraction(Interaction::BroughtToForeground));
+        assert(creature.isInForeground());
+        const float bondAfterFirstVisit = creature.affectionToPlayer();
+        assert(bondAfterFirstVisit >= bondBefore);
+
+        // Pressing the Main Screen command again while already there does nothing.
+        assert(!creature.applyInteraction(Interaction::BroughtToForeground));
+        assert(creature.affectionToPlayer() == bondAfterFirstVisit);
+
+        assert(creature.applyInteraction(Interaction::ReturnedToFarm));
+        assert(!creature.isInForeground());
+        assert(creature.applyInteraction(Interaction::BroughtToForeground));
+        // A quick return-and-reopen does not grant another bond reward.
+        assert(creature.affectionToPlayer() == bondAfterFirstVisit);
     }
-    std::cout << "All EvolvingGarden simulation tests passed.\\n";
+    {
+        CreatureSimulation creature;
+        creature.applyInteraction(Interaction::Pet);
+        creature.applyInteraction(Interaction::Feed);
+        assert(creature.memories().size() == 1); // Routine care is not chronicle material.
+
+        advance(creature, CreatureSimulation::SignificantEventCooldownSeconds);
+        creature.applyInteraction(Interaction::Novelty);
+        assert(creature.memories().size() == 2);
+
+        creature.applyInteraction(Interaction::Novelty);
+        creature.applyInteraction(Interaction::Pet);
+        assert(creature.memories().size() == 2); // At most one significant event per 10 minutes.
+
+        advance(creature, CreatureSimulation::SignificantEventCooldownSeconds);
+        Genome sensitiveGenome = makeDefaultGenome();
+        sensitiveGenome.personality.sensitivity = 100;
+        CreatureSimulation sensitive(sensitiveGenome);
+        advance(sensitive, CreatureSimulation::SignificantEventCooldownSeconds);
+        sensitive.applyInteraction(Interaction::LoudSound);
+        assert(sensitive.memories().size() == 2);
+        assert(sensitive.memories().at(1).type == EventType::Startled);
+    }
+    {
+        CreatureSimulation creature;
+        creature.applyInteraction(Interaction::LoudSound);
+        assert(creature.reaction().kind() == Reaction::Startled);
+        advance(creature, 2.0F);
+        assert(!creature.reaction().active());
+    }
+
+    std::cout << "All EvolvingGarden simulation tests passed.\n";
     return 0;
 }

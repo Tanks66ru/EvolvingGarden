@@ -18,7 +18,7 @@ struct PersonalityGenes {
 struct MorphologyGenes {
     std::uint8_t bodyWidth = 55, bodyHeight = 48, roundness = 64, asymmetry = 42;
     std::uint8_t surfaceComplexity = 44, appendageCount = 3, appendageLength = 52;
-    std::uint8_t appendageCurvature = 58, eyeSize = 55, eyeSpacing = 48;
+    std::uint8_t appendageCurvature = 58, eyeSize = 62, eyeSpacing = 48;
     std::uint8_t pigmentation = 62, patternDensity = 38, palette = 2;
     void normalize() {
         bodyWidth = clampValue<std::uint8_t>(bodyWidth, 10, 100);
@@ -46,7 +46,7 @@ inline Genome makeDefaultGenome() {
     Genome genome{};
     genome.seed = 0xE701A11U;
     genome.personality = PersonalityGenes{42, 38, 18, 72, 30, 24};
-    genome.morphology = MorphologyGenes{55, 48, 64, 42, 44, 3, 52, 58, 55, 48, 62, 38, 2};
+    genome.morphology = MorphologyGenes{55, 48, 64, 42, 44, 3, 52, 58, 62, 48, 62, 38, 2};
     return genome;
 }
 }

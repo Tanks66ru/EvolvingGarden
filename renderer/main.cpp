@@ -1,5 +1,6 @@
 #include "renderer/creature_renderer.hpp"
 #include "raylib.h"
+#include <algorithm>
 #include <array>
 using namespace evolvinggarden;
 namespace {
@@ -79,7 +80,10 @@ void drawNeedsAndEmotions(const CreatureSimulation& creature) {
 }
 void drawHabitat(const CreatureSimulation& creature, float time) {
     drawPanel({290.0F, 100.0F, 600.0F, 548.0F}, "LIVE HABITAT");
-    DrawText("ANCESTRAL ORGANISM  /  GENERATION 01", 312, 140, 11, TextMuted);
+    DrawText(creature.isInForeground()
+        ? "FOREGROUND  /  INDIVIDUAL ATTENTION"
+        : "ON FARM  /  LIVING IN THE HABITAT",
+        312, 140, 11, creature.isInForeground() ? Accent : TextMuted);
     DrawCircleGradient(590, 366, 190.0F, Color{49, 65, 72, 255}, Color{31, 37, 46, 255});
     DrawLine(325, 550, 855, 550, Color{68, 82, 91, 255});
     renderer::drawProceduralCreature({590.0F, 355.0F}, creature, time);
@@ -97,7 +101,7 @@ void drawRecentMemory(const CreatureSimulation& creature) {
 void drawChronicle(const CreatureSimulation& creature, int scrollOffset) {
     DrawRectangleRounded({24.0F, 100.0F, 1132.0F, 590.0F}, 0.025F, 10, Panel);
     DrawText("LIFE CHRONICLE", 50, 126, 20, TextPrimary);
-    DrawText("Significant events. Use UP/DOWN to browse older and newer entries.", 50, 158, 13, TextMuted);
+    DrawText("Only standout moments are kept. Maximum one event per 10 simulated minutes.", 50, 158, 13, TextMuted);
     const auto& journal = creature.memories();
     if (journal.size() == 0) {
         DrawText("No significant events yet.", 50, 220, 16, TextMuted);
@@ -130,10 +134,11 @@ void drawControls(bool chronicleOpen, bool paused) {
     DrawText("P  PET", 135, 715, 12, TextPrimary);
     DrawText("N  NOVELTY", 235, 715, 12, TextPrimary);
     DrawText("S  SOUND", 365, 715, 12, TextPrimary);
-    DrawText("B  MAIN SCREEN", 475, 715, 12, TextPrimary);
-    DrawText("H  CHRONICLE", 635, 715, 12, TextPrimary);
-    DrawText(paused ? "SPACE  RESUME" : "SPACE  PAUSE", 795, 715, 12, Accent);
-    if (chronicleOpen) DrawText("UP/DOWN SCROLL  |  BACKSPACE RETURN", 920, 715, 11, TextPrimary);
+    DrawText("B  MAIN SCREEN", 465, 715, 11, TextPrimary);
+    DrawText("R  RETURN TO FARM", 595, 715, 11, TextPrimary);
+    DrawText("H  CHRONICLE", 750, 715, 11, TextPrimary);
+    DrawText(paused ? "SPACE  RESUME" : "SPACE  PAUSE", 890, 715, 11, Accent);
+    if (chronicleOpen) DrawText("UP/DOWN SCROLL  |  BACKSPACE RETURN", 965, 715, 9, TextPrimary);
 }
 }
 int main() {
@@ -158,6 +163,7 @@ int main() {
             if (IsKeyPressed(KEY_N)) creature.applyInteraction(Interaction::Novelty);
             if (IsKeyPressed(KEY_S)) creature.applyInteraction(Interaction::LoudSound);
             if (IsKeyPressed(KEY_B)) creature.applyInteraction(Interaction::BroughtToForeground);
+            if (IsKeyPressed(KEY_R)) creature.applyInteraction(Interaction::ReturnedToFarm);
         }
         if (!paused) {
             creature.update(frameTime);
@@ -166,7 +172,7 @@ int main() {
         BeginDrawing();
         ClearBackground(Background);
         DrawText("EVOLVING GARDEN", 28, 25, 25, TextPrimary);
-        DrawText("BEHAVIOR & PROCEDURAL ORGANISM PROTOTYPE  /  0.2", 30, 58, 12, TextMuted);
+        DrawText("BEHAVIOR & PROCEDURAL ORGANISM PROTOTYPE  /  0.3", 30, 58, 12, TextMuted);
         DrawText(paused ? "PAUSED" : "SIMULATING", 1010, 35, 12,
             paused ? Color{221, 174, 105, 255} : Accent);
         if (chronicleOpen) drawChronicle(creature, chronicleScroll);

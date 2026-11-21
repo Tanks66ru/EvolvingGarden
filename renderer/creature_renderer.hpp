@@ -23,7 +23,17 @@ inline Color darken(Color color, float amount) {
         color.a
     };
 }
-inline void drawAppendages(Vector2 center, const Genome& genome, float time) {
+inline float emotion(const CreatureSimulation& creature, Emotion value) {
+    return creature.emotions().value(value);
+}
+inline void drawAppendages(
+    Vector2 center,
+    const Genome& genome,
+    float time,
+    Action action,
+    Reaction reaction,
+    float reactionPower)
+{
     constexpr float Pi = 3.14159265358979323846F;
     const auto& genes = genome.morphology;
     const int count = static_cast<int>(genes.appendageCount);
@@ -36,10 +46,20 @@ inline void drawAppendages(Vector2 center, const Genome& genome, float time) {
     const Color color = bodyColorFor(genes.palette);
     const Color outline = darken(color, 0.25F);
 
+    float activity = 1.0F;
+    if (action == Action::Rest || action == Action::Idle) activity = 0.45F;
+    if (action == Action::Play) activity = 1.65F;
+    if (action == Action::Explore) activity = 1.3F;
+    const float reactionFactor = reactionPower * 1.7F;
+
     for (int i = 0; i < count; ++i) {
-        const float angle = -Pi * 0.5F + (2.0F * Pi * static_cast<float>(i)) / static_cast<float>(count);
-        const float sway = std::sin(time * (1.1F + static_cast<float>(i) * 0.13F) + static_cast<float>(i))
-            * (2.0F + curvature * 7.0F);
+        const float index = static_cast<float>(i);
+        const float angle = -Pi * 0.5F + (2.0F * Pi * index) / static_cast<float>(count);
+        float sway = std::sin(time * (1.25F + index * 0.16F) + index * 1.7F)
+            * (3.0F + curvature * 13.0F) * activity;
+        sway += std::sin(time * 8.0F + index * 2.2F) * reactionFactor * 7.0F;
+        if (reaction == Reaction::Startled) sway += std::sin(time * 23.0F + index) * reactionPower * 8.0F;
+
         const Vector2 direction{std::cos(angle), std::sin(angle)};
         const Vector2 perpendicular{-direction.y, direction.x};
         const Vector2 start{
@@ -51,12 +71,12 @@ inline void drawAppendages(Vector2 center, const Genome& genome, float time) {
             start.y + direction.y * length + perpendicular.y * sway
         };
         const Vector2 control{
-            (start.x + end.x) * 0.5F + perpendicular.x * (curvature * 24.0F),
-            (start.y + end.y) * 0.5F + perpendicular.y * (curvature * 24.0F)
+            (start.x + end.x) * 0.5F + perpendicular.x * (curvature * 24.0F + sway * 0.35F),
+            (start.y + end.y) * 0.5F + perpendicular.y * (curvature * 24.0F + sway * 0.35F)
         };
 
         Vector2 previous = start;
-        constexpr int CurveSegments = 9;
+        constexpr int CurveSegments = 10;
         for (int segment = 1; segment <= CurveSegments; ++segment) {
             const float t = static_cast<float>(segment) / static_cast<float>(CurveSegments);
             const float inverse = 1.0F - t;
@@ -65,36 +85,187 @@ inline void drawAppendages(Vector2 center, const Genome& genome, float time) {
                 inverse * inverse * start.y + 2.0F * inverse * t * control.y + t * t * end.y
             };
             const float progress = static_cast<float>(segment - 1) / static_cast<float>(CurveSegments);
-            const float thickness = 12.0F * (1.0F - progress * 0.58F);
+            const float thickness = 12.5F * (1.0F - progress * 0.58F);
             DrawLineEx(previous, point, thickness + 3.0F, outline);
             DrawLineEx(previous, point, thickness, color);
             previous = point;
         }
-        DrawCircleV(end, 5.0F, darken(color, 0.18F));
+        DrawCircleV(end, 5.5F, darken(color, 0.18F));
     }
 }
-inline void drawProceduralCreature(Vector2 center, const CreatureSimulation& creature, float time) {
+inline void drawEye(
+    Vector2 center,
+    float eyeRadius,
+    float eyeOpen,
+    float pupilX,
+    float pupilY,
+    float pupilScale,
+    int side,
+    bool angry,
+    bool sad,
+    bool surprised,
+    bool happy)
+{
+    if (happy && eyeOpen < 0.55F) {
+        DrawLineEx(
+            {center.x - eyeRadius, center.y + 1.0F},
+            {center.x, center.y + eyeRadius * 0.25F},
+            3.4F, darken(Color{35, 43, 49, 255}, 0.0F));
+        DrawLineEx(
+            {center.x, center.y + eyeRadius * 0.25F},
+            {center.x + eyeRadius, center.y + 1.0F},
+            3.4F, darken(Color{35, 43, 49, 255}, 0.0F));
+    } else {
+        const float visibleHeight = eyeRadius * eyeOpen;
+        DrawEllipse(
+            static_cast<int>(center.x),
+            static_cast<int>(center.y),
+            eyeRadius,
+            std::max(1.0F, visibleHeight),
+            RAYWHITE
+        );
+        if (eyeOpen > 0.20F) {
+            const float pupilRadius = eyeRadius * 0.47F * pupilScale;
+            DrawEllipse(
+                static_cast<int>(center.x + pupilX),
+                static_cast<int>(center.y + pupilY),
+                pupilRadius,
+                std::min(visibleHeight * 0.72F, pupilRadius),
+                Color{35, 43, 49, 255}
+            );
+            DrawCircleV(
+                {center.x + pupilX - pupilRadius * 0.34F,
+                 center.y + pupilY - pupilRadius * 0.37F},
+                std::max(1.0F, pupilRadius * 0.20F),
+                RAYWHITE
+            );
+        }
+    }
+
+    if (angry) {
+        const Vector2 outer{center.x + static_cast<float>(side) * eyeRadius * 1.05F,
+                            center.y - eyeRadius * 1.25F};
+        const Vector2 inner{center.x - static_cast<float>(side) * eyeRadius * 1.05F,
+                            center.y - eyeRadius * 0.48F};
+        DrawLineEx(outer, inner, 4.0F, Color{54, 57, 63, 255});
+    } else if (sad) {
+        const Vector2 outer{center.x + static_cast<float>(side) * eyeRadius,
+                            center.y - eyeRadius * 0.75F};
+        const Vector2 inner{center.x - static_cast<float>(side) * eyeRadius,
+                            center.y - eyeRadius * 1.25F};
+        DrawLineEx(outer, inner, 3.0F, Color{70, 79, 91, 255});
+    } else if (surprised) {
+        DrawLineEx(
+            {center.x - eyeRadius * 0.75F, center.y - eyeRadius * 1.55F},
+            {center.x + eyeRadius * 0.75F, center.y - eyeRadius * 1.55F},
+            2.4F, Color{70, 79, 91, 255});
+    }
+}
+inline void drawProceduralCreature(
+    Vector2 center,
+    const CreatureSimulation& creature,
+    float time)
+{
     constexpr float Pi = 3.14159265358979323846F;
-    constexpr int Segments = 48;
+    constexpr int Segments = 56;
     const Genome& genome = creature.genome();
     const auto& genes = genome.morphology;
-    center.y += std::sin(time * 2.1F) * 4.0F;
+    const auto& reactionState = creature.reaction();
+    const Reaction reaction = reactionState.kind();
+    const float reactionPower = reactionState.intensity();
+
+    const float curiosity = emotion(creature, Emotion::Curiosity);
+    const float fear = emotion(creature, Emotion::Fear);
+    const float anger = emotion(creature, Emotion::Anger);
+    const float surprise = emotion(creature, Emotion::Surprise);
+    const float joy = std::max(emotion(creature, Emotion::Joy),
+                               emotion(creature, Emotion::Affection) * 0.82F);
+    const float sadness = emotion(creature, Emotion::Sadness);
+
+    float offsetX = std::sin(time * 0.52F) * 2.0F;
+    float offsetY = std::sin(time * 2.0F) * 2.6F;
+    float squash = std::sin(time * 1.7F) * 0.012F;
+    float stretch = 0.0F;
+
+    switch (creature.action()) {
+    case Action::Explore:
+        offsetX += std::sin(time * 1.4F) * 5.0F;
+        offsetY -= std::abs(std::sin(time * 3.3F)) * 2.0F;
+        break;
+    case Action::Play:
+        offsetY -= std::abs(std::sin(time * 5.5F)) * 7.0F;
+        squash += std::sin(time * 5.5F) * 0.025F;
+        stretch += std::sin(time * 5.5F) * 0.035F;
+        break;
+    case Action::Rest:
+        offsetY += std::sin(time * 0.85F) * 1.5F;
+        squash -= 0.025F;
+        break;
+    case Action::Observe:
+        offsetX += std::sin(time * 0.75F) * 2.5F;
+        break;
+    case Action::SeekCompany:
+        offsetX += std::sin(time * 1.25F) * 3.0F;
+        break;
+    case Action::Forage:
+        offsetY += 2.0F + std::sin(time * 2.8F) * 1.5F;
+        break;
+    case Action::Idle:
+        break;
+    }
+
+    switch (reaction) {
+    case Reaction::Happy:
+        offsetY -= 13.0F * reactionPower;
+        squash += 0.035F * reactionPower;
+        stretch -= 0.025F * reactionPower;
+        break;
+    case Reaction::Affectionate:
+        offsetY -= 5.0F * reactionPower;
+        offsetX += std::sin(time * 8.0F) * 2.5F * reactionPower;
+        break;
+    case Reaction::Curious:
+        offsetX += 5.0F * reactionPower;
+        offsetY -= 3.0F * reactionPower;
+        break;
+    case Reaction::Startled:
+        offsetY -= 17.0F * reactionPower;
+        offsetX += std::sin(time * 25.0F) * 3.0F * reactionPower;
+        squash -= 0.045F * reactionPower;
+        stretch += 0.035F * reactionPower;
+        break;
+    case Reaction::Annoyed:
+        offsetX += std::sin(time * 30.0F) * 5.0F * reactionPower;
+        break;
+    case Reaction::None:
+        break;
+    }
+
+    center.x += offsetX;
+    center.y += offsetY;
 
     const float widthScale = 0.82F + static_cast<float>(genes.bodyWidth) / 100.0F * 0.38F;
     const float heightScale = 0.82F + static_cast<float>(genes.bodyHeight) / 100.0F * 0.42F;
-    const float radiusX = 112.0F * widthScale;
-    const float radiusY = 101.0F * heightScale;
+    const float radiusX = 112.0F * widthScale * (1.0F + squash + stretch);
+    const float radiusY = 101.0F * heightScale * (1.0F - squash - stretch * 0.65F);
     const float roundness = static_cast<float>(genes.roundness) / 100.0F;
     const float asymmetry = static_cast<float>(genes.asymmetry) / 100.0F;
     const float complexity = static_cast<float>(genes.surfaceComplexity) / 100.0F;
-    const float irregularity = (0.025F + asymmetry * 0.065F + complexity * 0.075F) * (1.0F - roundness * 0.56F);
+    const float activity = static_cast<float>(genes.appendageCurvature) / 100.0F;
+    const float irregularity = (0.025F + asymmetry * 0.065F + complexity * 0.075F)
+        * (1.0F - roundness * 0.56F);
     const float phase = static_cast<float>(genome.seed % 997U) * 0.013F;
     const Color bodyColor = bodyColorFor(genes.palette);
     const Color outlineColor = darken(bodyColor, 0.28F);
 
-    DrawEllipse(static_cast<int>(center.x), static_cast<int>(center.y + radiusY * 0.88F),
-        radiusX * 0.82F, 17.0F, Fade(BLACK, 0.22F));
-    drawAppendages(center, genome, time);
+    DrawEllipse(
+        static_cast<int>(center.x),
+        static_cast<int>(center.y + radiusY * 0.88F),
+        radiusX * 0.82F,
+        17.0F,
+        Fade(BLACK, 0.22F)
+    );
+    drawAppendages(center, genome, time, creature.action(), reaction, reactionPower);
 
     std::array<Vector2, Segments + 2> fan{};
     std::array<Vector2, Segments> contour{};
@@ -104,7 +275,11 @@ inline void drawProceduralCreature(Vector2 center, const CreatureSimulation& cre
         const float wave = std::cos(2.0F * angle + phase) * 0.42F
             + std::sin(3.0F * angle + phase * 1.7F) * 0.34F
             + std::cos(5.0F * angle - phase * 0.8F) * 0.24F;
-        const float radius = 1.0F + irregularity * wave;
+        const float breathing = std::sin(time * 1.8F + angle * 2.0F + phase)
+            * (0.006F + activity * 0.006F);
+        const float startledRipple = reaction == Reaction::Startled
+            ? std::sin(time * 22.0F + angle * 5.0F) * reactionPower * 0.012F : 0.0F;
+        const float radius = 1.0F + irregularity * wave + breathing + startledRipple;
         const Vector2 point{
             center.x + std::cos(angle) * radiusX * radius,
             center.y + std::sin(angle) * radiusY * radius
@@ -121,7 +296,6 @@ inline void drawProceduralCreature(Vector2 center, const CreatureSimulation& cre
         DrawLineEx(from, to, 3.0F, outlineColor);
     }
 
-    // Deterministic spots: the same genome always produces the same pattern.
     std::mt19937 spotRandom(genome.seed ^ 0x51A7U);
     std::uniform_real_distribution<float> angleDistribution(0.0F, 2.0F * Pi);
     std::uniform_real_distribution<float> radiusDistribution(0.18F, 0.68F);
@@ -137,45 +311,101 @@ inline void drawProceduralCreature(Vector2 center, const CreatureSimulation& cre
         DrawCircleV(spot, size, Fade(darken(bodyColor, 0.3F), 0.45F));
     }
 
-    const float eyeScale = 0.72F + static_cast<float>(genes.eyeSize) / 100.0F * 0.58F;
+    const float eyeScale = 0.76F + static_cast<float>(genes.eyeSize) / 100.0F * 0.52F;
     const float eyeSpacing = 27.0F + static_cast<float>(genes.eyeSpacing) * 0.31F;
-    const float eyeY = center.y - 10.0F;
-    const float eyeRadius = 8.0F * eyeScale;
-    float pupilOffsetX = 0.0F;
-    float pupilOffsetY = 0.0F;
+    const float eyeRadius = 8.8F * eyeScale;
+    const bool angryFace = anger > 18.0F;
+    const bool fearFace = fear > 32.0F;
+    const bool surprisedFace = surprise > 28.0F;
+    const bool sadFace = sadness > 28.0F && !fearFace;
+    const bool happyFace = joy > 35.0F && !angryFace && !fearFace && !surprisedFace;
+
+    float gazeX = std::sin(time * 0.58F + phase) * (2.0F + curiosity * 0.035F);
+    float gazeY = std::cos(time * 0.41F + phase * 0.7F) * 1.8F;
     switch (creature.action()) {
     case Action::Explore:
-    case Action::Observe: pupilOffsetX = 2.8F; pupilOffsetY = -1.0F; break;
-    case Action::Forage: pupilOffsetY = 2.0F; break;
-    case Action::SeekCompany: pupilOffsetX = -2.2F; break;
-    default: break;
+        gazeX += std::sin(time * 1.2F) * 5.5F;
+        gazeY -= 1.5F;
+        break;
+    case Action::Observe:
+        gazeX += std::sin(time * 0.86F) * 7.0F;
+        break;
+    case Action::Forage:
+        gazeY += 3.0F;
+        break;
+    case Action::SeekCompany:
+        gazeX -= 3.5F;
+        break;
+    case Action::Play:
+        gazeX += std::sin(time * 4.0F) * 3.0F;
+        break;
+    case Action::Idle:
+    case Action::Rest:
+        break;
     }
+    if (reaction == Reaction::Curious) gazeX += 7.0F * reactionPower;
+    if (reaction == Reaction::Startled || fearFace) gazeY -= 3.0F;
+    if (reaction == Reaction::Affectionate) gazeY += 2.0F;
 
-    const bool blinking = std::sin(time * 0.73F + phase) > 0.9985F;
+    const float blinkCycle = std::fmod(time + phase, 4.8F);
+    const float blinkAmount = clampValue(1.0F - std::abs(blinkCycle - 4.48F) / 0.12F, 0.0F, 1.0F);
+    float eyeOpen = 1.0F;
+    if (angryFace) eyeOpen = 0.62F;
+    else if (sadFace) eyeOpen = 0.82F;
+    else if (surprisedFace || fearFace) eyeOpen = 1.13F;
+    else if (happyFace) eyeOpen = 0.48F;
+    eyeOpen *= 1.0F - blinkAmount * 0.96F;
+    const float pupilScale = (fearFace || surprisedFace) ? 0.78F : 1.0F;
     for (int side = -1; side <= 1; side += 2) {
-        const Vector2 eyeCenter{center.x + static_cast<float>(side) * eyeSpacing, eyeY};
-        if (blinking) {
-            DrawLineEx({eyeCenter.x - eyeRadius, eyeCenter.y},
-                {eyeCenter.x + eyeRadius, eyeCenter.y}, 3.0F, DARKGRAY);
-            continue;
-        }
-        DrawCircleV(eyeCenter, eyeRadius, RAYWHITE);
-        DrawCircleV({eyeCenter.x + pupilOffsetX, eyeCenter.y + pupilOffsetY},
-            eyeRadius * 0.48F, Color{35, 43, 49, 255});
-        DrawCircleV({eyeCenter.x + pupilOffsetX - 2.0F, eyeCenter.y + pupilOffsetY - 2.5F},
-            eyeRadius * 0.16F, RAYWHITE);
+        const Vector2 eyeCenter{
+            center.x + static_cast<float>(side) * eyeSpacing,
+            center.y - 10.0F + (sadFace ? 2.0F : 0.0F)
+        };
+        drawEye(
+            eyeCenter, eyeRadius, eyeOpen,
+            gazeX, gazeY, pupilScale, side,
+            angryFace, sadFace, surprisedFace, happyFace
+        );
     }
 
-    if (creature.emotions().value(Emotion::Fear) > 42.0F) {
-        DrawCircleLines(static_cast<int>(center.x), static_cast<int>(center.y + 31.0F),
-            8.0F, darken(bodyColor, 0.60F));
+    const float mouthY = center.y + 29.0F;
+    const float mouthWidth = 10.0F + genes.eyeSize * 0.025F;
+    if (surprisedFace || fearFace) {
+        const float mouthRadius = surprisedFace ? 7.0F : 5.5F;
+        DrawEllipse(
+            static_cast<int>(center.x),
+            static_cast<int>(mouthY),
+            mouthRadius,
+            mouthRadius * (fearFace ? 1.25F : 1.0F),
+            Color{55, 58, 66, 255}
+        );
+        DrawEllipse(
+            static_cast<int>(center.x),
+            static_cast<int>(mouthY - 1.0F),
+            mouthRadius * 0.55F,
+            mouthRadius * 0.65F,
+            darken(bodyColor, 0.18F)
+        );
     } else {
-        const float smile = creature.mood() > 12.0F ? 1.0F : (creature.mood() < -18.0F ? -0.45F : 0.25F);
-        const Vector2 left{center.x - 11.0F, center.y + 27.0F};
-        const Vector2 middle{center.x, center.y + 27.0F + smile * 6.0F};
-        const Vector2 right{center.x + 11.0F, center.y + 27.0F};
-        DrawLineEx(left, middle, 2.7F, darken(bodyColor, 0.65F));
-        DrawLineEx(middle, right, 2.7F, darken(bodyColor, 0.65F));
+        float curve = creature.mood() > 12.0F ? 5.5F : -3.5F;
+        if (angryFace) curve = -5.5F;
+        if (sadFace) curve = -6.0F;
+        if (happyFace) curve = 7.0F;
+        const Color mouthColor{55, 58, 66, 255};
+        const Vector2 left{center.x - mouthWidth, mouthY};
+        const Vector2 middle{center.x, mouthY + curve};
+        const Vector2 right{center.x + mouthWidth, mouthY};
+        DrawLineEx(left, middle, 2.8F, mouthColor);
+        DrawLineEx(middle, right, 2.8F, mouthColor);
+    }
+
+    if (emotion(creature, Emotion::Affection) > 30.0F || happyFace) {
+        const Color cheek = Fade(Color{222, 125, 133, 255},
+            clampValue((joy / 100.0F) * 0.68F, 0.0F, 0.68F));
+        DrawEllipse(static_cast<int>(center.x - eyeSpacing - 10.0F),
+            static_cast<int>(center.y + 13.0F), 7.0F, 3.0F, cheek);
+        DrawEllipse(static_cast<int>(center.x + eyeSpacing + 10.0F),
+            static_cast<int>(center.y + 13.0F), 7.0F, 3.0F, cheek);
     }
 }
 }

@@ -18,7 +18,7 @@ struct MemoryEvent {
 class MemoryJournal {
 public:
     static constexpr std::size_t Capacity = 24;
-    static constexpr std::uint8_t MinimumSignificance = 28;
+    static constexpr std::uint8_t MinimumSignificance = 75;
     bool add(const MemoryEvent& event) {
         if (event.significance < MinimumSignificance) return false;
         if (size_ == Capacity) {
@@ -38,12 +38,12 @@ private:
 inline std::string_view eventTitle(EventType type) {
     switch (type) {
     case EventType::Birth: return "A new life begins";
-    case EventType::Fed: return "A satisfying meal";
-    case EventType::Petted: return "A moment of contact";
+    case EventType::Fed: return "A meal after severe hunger";
+    case EventType::Petted: return "An important moment of contact";
     case EventType::NoveltyDiscovered: return "An unusual discovery";
     case EventType::BroughtToForeground: return "Chosen for the main screen";
-    case EventType::Startled: return "A sudden scare";
-    case EventType::BondMilestone: return "A bond is growing";
+    case EventType::Startled: return "A frightening experience";
+    case EventType::BondMilestone: return "A strong bond was formed";
     case EventType::FirstSocialContact: return "First social contact";
     case EventType::HabitFormed: return "A new habit formed";
     case EventType::Count: break;
@@ -53,14 +53,14 @@ inline std::string_view eventTitle(EventType type) {
 inline std::string_view eventDescription(EventType type) {
     switch (type) {
     case EventType::Birth: return "The creature entered the world.";
-    case EventType::Fed: return "Food changed its needs and emotional state.";
-    case EventType::Petted: return "The creature experienced direct contact.";
-    case EventType::NoveltyDiscovered: return "Something unusual caught its attention.";
-    case EventType::BroughtToForeground: return "The player gave this creature individual attention.";
-    case EventType::Startled: return "A sudden stimulus caused a strong reaction.";
-    case EventType::BondMilestone: return "Its relationship with the player reached a milestone.";
+    case EventType::Fed: return "The creature was fed after becoming extremely hungry.";
+    case EventType::Petted: return "A rare interaction had a strong emotional effect.";
+    case EventType::NoveltyDiscovered: return "An unusual experience left a lasting impression.";
+    case EventType::BroughtToForeground: return "The creature was selected for individual attention.";
+    case EventType::Startled: return "A sudden stimulus caused an unusually strong fear response.";
+    case EventType::BondMilestone: return "Its relationship with the player reached a major milestone.";
     case EventType::FirstSocialContact: return "The creature interacted with another inhabitant.";
-    case EventType::HabitFormed: return "A repeated experience became a preference.";
+    case EventType::HabitFormed: return "A repeated experience became a lasting preference.";
     case EventType::Count: break;
     }
     return "";
