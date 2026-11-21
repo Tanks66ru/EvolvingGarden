@@ -17,7 +17,7 @@ struct CreatureNeeds {
     float boredom = 28.0F;
 };
 enum class Interaction : std::uint8_t {
-    Feed, Pet, Novelty, LoudSound, BroughtToForeground, ReturnedToFarm, Count
+    Feed, Pet, Novelty, LoudSound, BadTaste, BroughtToForeground, ReturnedToFarm, Count
 };
 enum class Action : std::uint8_t { Idle, Explore, Play, Rest, SeekCompany, Observe, Forage };
 inline const char* actionName(Action action) {
@@ -85,6 +85,10 @@ public:
             cooldowns_[index] = 1.40F;
             applyNovelty();
             break;
+        case Interaction::BadTaste:
+            cooldowns_[index] = 1.40F;
+            applyBadTaste();
+            break;
         case Interaction::BroughtToForeground:
             changed = bringToForeground();
             break;
@@ -104,7 +108,7 @@ public:
     // intensity is normalized to [0, 1], duration is measured in seconds.
     bool applySoundStimulus(float intensity, float durationSeconds) {
         const std::size_t index = static_cast<std::size_t>(Interaction::LoudSound);
-        if (cooldowns_[index] > 0.0F) return false;
+        if (cooldowns_[index] > 0.0F || reaction_.active()) return false;
 
         const float loudness = clampValue(intensity, 0.0F, 1.0F);
         const float duration = clampValue(durationSeconds, 0.0F, 3.0F);
@@ -144,8 +148,10 @@ public:
         soundExposure_ = std::max(0.0F, soundExposure_ - dt * 0.38F);
 
         updateNeeds(dt);
+        updateDistress(dt);
         emotions_.update(dt);
         reaction_.update(dt);
+        updateAutonomousReaction();
         actionTimer_ -= dt;
         if (actionTimer_ <= 0.0F) chooseAction();
         applyAction(dt);
@@ -179,7 +185,8 @@ private:
         emotions_.add(Emotion::Joy, hungerBefore > 35.0F ? 28.0F : 10.0F);
         emotions_.add(Emotion::Affection, 5.0F);
         if (hungerBefore > 35.0F) {
-            reaction_.trigger(Reaction::Happy, 82.0F, 1.15F);
+            const bool exaggerated = hungerBefore >= 88.0F;
+            reaction_.trigger(Reaction::Happy, 82.0F, exaggerated ? 1.65F : 1.15F, exaggerated);
         }
         if (hungerBefore >= 90.0F) remember(EventType::Fed, 55, 82);
     }
@@ -194,11 +201,15 @@ private:
             emotions_.add(Emotion::Joy, 10.0F + welcome * 18.0F);
             emotions_.add(Emotion::Affection, 15.0F + welcome * 20.0F);
             needs_.social = clampPercent(needs_.social - 9.0F);
-            reaction_.trigger(Reaction::Affectionate, 65.0F + welcome * 30.0F, 1.35F);
+            const bool exaggerated = welcome >= 0.92F;
+            reaction_.trigger(Reaction::Affectionate, 65.0F + welcome * 30.0F,
+                exaggerated ? 1.75F : 1.35F, exaggerated);
         } else {
             emotions_.add(Emotion::Anger, 8.0F + (0.48F - welcome) * 26.0F);
             emotions_.add(Emotion::Fear, sensitivity * 10.0F);
-            reaction_.trigger(Reaction::Angry, 55.0F + (0.48F - welcome) * 70.0F, 1.0F);
+            const bool exaggerated = welcome <= 0.12F;
+            reaction_.trigger(Reaction::Angry, 55.0F + (0.48F - welcome) * 70.0F,
+                exaggerated ? 1.45F : 1.0F, exaggerated);
         }
         affectionToPlayer_ = clampPercent(affectionToPlayer_ + (welcome - 0.45F) * 0.35F);
         checkBondMilestone();
@@ -214,7 +225,9 @@ private:
         emotions_.add(Emotion::Surprise, 26.0F);
         emotions_.add(Emotion::Curiosity, 18.0F + curiosity * 20.0F);
         emotions_.add(Emotion::Joy, optimism * 17.0F);
-        reaction_.trigger(Reaction::Curious, 55.0F + curiosity * 40.0F, 1.35F);
+        const bool exaggerated = curiosity >= 0.92F && noveltyCount_ == 0;
+        reaction_.trigger(Reaction::Curious, 55.0F + curiosity * 40.0F,
+            exaggerated ? 1.7F : 1.35F, exaggerated);
 
         const float bondGain = (0.10F + curiosity * 0.72F + optimism * 0.48F)
             * diminishingReturn;
@@ -226,6 +239,17 @@ private:
         needs_.boredom = clampPercent(needs_.boredom - 14.0F);
         remember(EventType::NoveltyDiscovered, static_cast<int>(curiosity * 40.0F), significance);
         checkBondMilestone();
+    }
+
+
+    void applyBadTaste() {
+        const float sensitivity = normalizeTrait(genome_.personality.sensitivity);
+        emotions_.add(Emotion::Disgust, 62.0F + sensitivity * 25.0F);
+        emotions_.add(Emotion::Joy, -8.0F);
+        needs_.hunger = clampPercent(needs_.hunger + 5.0F);
+        const bool exaggerated = sensitivity >= 0.80F;
+        reaction_.trigger(Reaction::Disgusted, 78.0F + sensitivity * 20.0F,
+            exaggerated ? 1.65F : 1.15F, exaggerated);
     }
 
     bool bringToForeground() {
@@ -277,6 +301,27 @@ private:
         if (milestone > lastBondMilestone_) {
             lastBondMilestone_ = milestone;
             remember(EventType::BondMilestone, 45, 88);
+        }
+    }
+
+
+    void updateDistress(float dt) {
+        if (needs_.hunger >= 85.0F) {
+            emotions_.add(Emotion::Sadness, (needs_.hunger - 80.0F) * 0.070F * dt);
+        }
+        const float sociability = normalizeTrait(genome_.personality.sociability);
+        if (needs_.social >= 82.0F && sociability >= 0.65F) {
+            emotions_.add(Emotion::Sadness, (needs_.social - 78.0F) * 0.065F * dt);
+        }
+    }
+
+    void updateAutonomousReaction() {
+        if (reaction_.active() || simulationTime_ < nextAutonomousReactionTime_) return;
+        const float sadness = emotions_.value(Emotion::Sadness);
+        if (sadness >= 42.0F) {
+            const bool exaggerated = sadness >= 82.0F;
+            reaction_.trigger(Reaction::Sad, sadness, exaggerated ? 1.8F : 1.3F, exaggerated);
+            nextAutonomousReactionTime_ = simulationTime_ + 4.0F;
         }
     }
 
@@ -368,6 +413,7 @@ private:
     float lastSignificantEventTime_ = 0.0F;
     float lastForegroundRewardTime_ = 0.0F;
     float soundExposure_ = 0.0F;
+    float nextAutonomousReactionTime_ = 0.0F;
     std::uint32_t noveltyCount_ = 0;
     std::uint32_t foregroundVisits_ = 0;
     int lastBondMilestone_ = 0;

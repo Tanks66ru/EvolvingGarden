@@ -151,15 +151,16 @@ void drawChronicle(const CreatureSimulation& creature, int scrollOffset) {
 }
 void drawControls(bool chronicleOpen, bool paused) {
     DrawText("F FEED", 24, 715, 11, TextPrimary);
-    DrawText("P PET", 100, 715, 11, TextPrimary);
-    DrawText("N NOVELTY", 165, 715, 11, TextPrimary);
-    DrawText("S SOUND", 270, 715, 11, TextPrimary);
-    DrawText("L LONG ROAR", 350, 715, 11, Color{238, 166, 112, 255});
-    DrawText("B MAIN", 470, 715, 11, TextPrimary);
-    DrawText("R FARM", 550, 715, 11, TextPrimary);
-    DrawText("H CHRONICLE", 635, 715, 11, TextPrimary);
-    DrawText(paused ? "SPACE RESUME" : "SPACE PAUSE", 780, 715, 11, Accent);
-    if (chronicleOpen) DrawText("UP/DOWN SCROLL | BACKSPACE RETURN", 915, 715, 10, TextPrimary);
+    DrawText("P PET", 92, 715, 11, TextPrimary);
+    DrawText("N NOVELTY", 154, 715, 11, TextPrimary);
+    DrawText("S SOUND", 253, 715, 11, TextPrimary);
+    DrawText("L LONG ROAR", 328, 715, 11, Color{238, 166, 112, 255});
+    DrawText("G BAD TASTE", 430, 715, 11, TextPrimary);
+    DrawText("B MAIN", 540, 715, 11, TextPrimary);
+    DrawText("R FARM", 620, 715, 11, TextPrimary);
+    DrawText("H CHRONICLE", 690, 715, 11, TextPrimary);
+    DrawText(paused ? "SPACE RESUME" : "SPACE PAUSE", 830, 715, 11, Accent);
+    if (chronicleOpen) DrawText("UP/DOWN SCROLL | BACKSPACE RETURN", 960, 715, 9, TextPrimary);
 }
 }
 int main() {
@@ -184,6 +185,7 @@ int main() {
             if (IsKeyPressed(KEY_N)) creature.applyInteraction(Interaction::Novelty);
             if (IsKeyPressed(KEY_S)) creature.applyInteraction(Interaction::LoudSound);
             if (IsKeyPressed(KEY_L)) creature.applySoundStimulus(0.98F, 1.25F);
+            if (IsKeyPressed(KEY_G)) creature.applyInteraction(Interaction::BadTaste);
             if (IsKeyPressed(KEY_B)) creature.applyInteraction(Interaction::BroughtToForeground);
             if (IsKeyPressed(KEY_R)) creature.applyInteraction(Interaction::ReturnedToFarm);
         }

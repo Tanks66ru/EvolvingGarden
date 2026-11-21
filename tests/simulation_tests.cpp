@@ -85,10 +85,8 @@ int main() {
         assert(creature.isInForeground());
         const float bondAfterFirstVisit = creature.affectionToPlayer();
         assert(bondAfterFirstVisit >= bondBefore);
-
         assert(!creature.applyInteraction(Interaction::BroughtToForeground));
         assert(creature.affectionToPlayer() == bondAfterFirstVisit);
-
         assert(creature.applyInteraction(Interaction::ReturnedToFarm));
         assert(!creature.isInForeground());
         assert(creature.applyInteraction(Interaction::BroughtToForeground));
@@ -107,6 +105,21 @@ int main() {
         assert(creature.reaction().kind() == Reaction::Fearful);
         assert(creature.reaction().exaggerated());
         assert(!creature.applySoundStimulus(0.98F, 1.25F));
+    }
+    {
+        Genome sensitiveGenome = makeDefaultGenome();
+        sensitiveGenome.personality.sensitivity = 100;
+        CreatureSimulation creature(sensitiveGenome);
+        assert(creature.applyInteraction(Interaction::BadTaste));
+        assert(creature.reaction().kind() == Reaction::Disgusted);
+        assert(creature.reaction().exaggerated());
+    }
+    {
+        CreatureSimulation creature;
+        advance(creature, 1800.0F);
+        assert(creature.needs().hunger >= 99.0F);
+        assert(creature.emotions().value(Emotion::Sadness) >= 42.0F
+            || creature.reaction().kind() == Reaction::Sad);
     }
     {
         CreatureSimulation creature;

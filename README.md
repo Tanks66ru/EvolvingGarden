@@ -12,7 +12,7 @@ The desktop prototype contains a first behavior, character-budget and reaction-a
 - Eight emotional channels, plus mood and arousal.
 - Four basic needs: hunger, energy, social contact and boredom.
 - A lightweight action selector responding to personality and needs.
-- Eight shared reaction archetypes, each with a standard and exaggerated presentation.
+- Eight shared reaction archetypes, each with a standard and exaggerated presentation. Strong neglect can trigger sadness; a bad-taste test stimulus triggers disgust.
 - Procedural 2D creature geometry generated from compact morphology genes.
 - Autonomous gaze, blinking, emotion-based facial expressions, body motion and appendage animation.
 - Input cooldowns, including a 1.5-second cooldown for sound stimuli.
@@ -45,6 +45,7 @@ The budget is stored in the genome so future mutation rules can change the avail
 - N: Present an unusual stimulus
 - S: Play a short sound stimulus
 - L: Simulate a sustained, very loud sound (exaggerated fear reaction)
+- G: Simulate an unpleasant taste (disgust reaction)
 - B: Bring the creature to the main screen
 - R: Return the creature to the farm
 - H: Open or close the life chronicle
