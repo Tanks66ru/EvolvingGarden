@@ -60,7 +60,7 @@ The ESP32 stores one versioned snapshot in NVS under namespace `garden`, key `pe
 - simulation timers and progression counters;
 - lifetime step count and random-generator state.
 
-Interaction and step changes request a save. Flash writes are throttled so they occur no more often than every ten seconds, with a periodic checkpoint every minute for passive changes to needs and mood. A reset may lose a short unsaved interval, but it should not erase the creature's entire progress. The save is local; this firmware does not use Wi-Fi or a remote server.
+Interaction and step changes request a save. Flash writes are throttled so they occur no more often than every three seconds, with a periodic checkpoint every minute for passive changes to needs and mood. A reset may lose a short unsaved interval, but it should not erase the creature's entire progress. The save is local; this firmware does not use Wi-Fi or a remote server.
 
 ## Audio
 
