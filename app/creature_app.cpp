@@ -145,7 +145,7 @@ void updatePersistence(float dt) {
     secondsSinceSave += dt;
 
     // Keep flash writes sparse, but flush interaction and step changes promptly.
-    if ((saveRequested && secondsSinceSave >= 10.0F) || saveInterval >= 60.0F) {
+    if ((saveRequested && secondsSinceSave >= 3.0F) || saveInterval >= 60.0F) {
         if (persistence::save(pet)) {
             saveRequested = false;
             saveInterval = 0.0F;
