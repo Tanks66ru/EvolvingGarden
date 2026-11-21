@@ -3,10 +3,12 @@
 #include "lvgl.h"
 
 #include "simulation/creature_simulation.hpp"
+#include "audio_controller.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 
 using namespace evolvinggarden;
 
@@ -23,24 +25,33 @@ struct PetUi {
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
     lv_obj_t* status = nullptr;
+    lv_obj_t* actionButton = nullptr;
+    lv_obj_t* actionLabel = nullptr;
+    lv_obj_t* debugPanel = nullptr;
+    lv_obj_t* debugLabel = nullptr;
 };
 
-struct InteractionButton {
+struct ActionOption {
     Interaction interaction;
+    const char* label;
     const char* acceptedMessage;
+    std::uint32_t buttonColor;
 };
 
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
 float animationTime = 0.0F;
 float messageUntil = 0.0F;
+float nextDebugRefresh = 0.0F;
 const char* messageOverride = nullptr;
 const char* lastStatus = nullptr;
+int selectedAction = 0;
+Reaction lastAudioReaction = Reaction::None;
 
-InteractionButton buttonData[] = {
-    {Interaction::Pet, "THAT'S NICE"},
-    {Interaction::Feed, "YUM!"},
-    {Interaction::Novelty, "WHAT IS THAT?"}
+ActionOption actionOptions[] = {
+    {Interaction::Pet, "PET", "THAT'S NICE", 0xB7E3D1},
+    {Interaction::Feed, "FEED", "YUM!", 0xE5C98F},
+    {Interaction::Novelty, "DISCOVER", "WHAT IS THAT?", 0xB9CAE9}
 };
 
 lv_color_t color(std::uint32_t hex) {
@@ -100,33 +111,72 @@ const char* actionTag(Action action) {
     return "WANDERING";
 }
 
-void onInteraction(lv_event_t* event) {
-    auto* data = static_cast<InteractionButton*>(lv_event_get_user_data(event));
-    if (data == nullptr) return;
-
-    if (pet.applyInteraction(data->interaction)) {
-        messageOverride = data->acceptedMessage;
+void updateActionButton() {
+    if (ui.actionButton == nullptr || ui.actionLabel == nullptr) return;
+    const ActionOption& option = actionOptions[selectedAction];
+    lv_label_set_text(ui.actionLabel, option.label);
+    lv_obj_set_style_bg_color(ui.actionButton, color(option.buttonColor), LV_PART_MAIN);
+}
+void selectNextAction() {
+    selectedAction = (selectedAction + 1) % (sizeof(actionOptions) / sizeof(actionOptions[0]));
+    updateActionButton();
+}
+void performSelectedAction() {
+    const ActionOption& option = actionOptions[selectedAction];
+    if (pet.applyInteraction(option.interaction)) {
+        messageOverride = option.acceptedMessage;
         messageUntil = animationTime + 1.15F;
         setStatus(messageOverride);
+        audio::play(audio::Cue::Button);
     }
 }
+void onActionClicked(lv_event_t*) { performSelectedAction(); }
 
-void createButton(lv_obj_t* parent, int x, InteractionButton* data,
-                  const char* labelText, std::uint32_t buttonColor) {
-    lv_obj_t* button = lv_button_create(parent);
-    lv_obj_set_size(button, 112, 42);
-    lv_obj_set_pos(button, x, 397);
-    lv_obj_set_style_bg_color(button, color(buttonColor), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(button, 17, LV_PART_MAIN);
-    lv_obj_set_style_border_width(button, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
-    lv_obj_add_event_cb(button, onInteraction, LV_EVENT_CLICKED, data);
-
-    lv_obj_t* label = makeLabel(button, labelText, &lv_font_montserrat_14, 0x14252C);
-    lv_obj_center(label);
+void refreshDebugPanel() {
+    if (ui.debugLabel == nullptr) return;
+    const CreatureNeeds& needs = pet.needs();
+    char text[512]{};
+    std::snprintf(text, sizeof(text),
+        "MICROPHONE   %s   %u%%\n"
+        "SPEAKER      %s\n\n"
+        "HUNGER       %3.0f%%\n"
+        "ENERGY       %3.0f%%\n"
+        "SOCIAL       %3.0f%%\n"
+        "BOREDOM      %3.0f%%\n\n"
+        "MOOD         %+.0f\n"
+        "REACTION     %s\n"
+        "ACTION       %s\n\n"
+        "AUDIO INPUT   %s\n"
+        "AUDIO OUTPUT  %s",
+        audio::microphoneReady() ? "READY" : "OFF",
+        static_cast<unsigned>(audio::microphoneLevelPercent()),
+        audio::speakerReady() ? "READY" : "OFF",
+        needs.hunger, needs.energy, needs.social, needs.boredom,
+        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()),
+        audio::microphoneReady() ? "ONBOARD MIC" : "UNAVAILABLE",
+        audio::speakerReady() ? "ONBOARD SPEAKER" : "UNAVAILABLE");
+    lv_label_set_text(ui.debugLabel, text);
 }
-
+void showDebugPanel() {
+    if (ui.debugPanel == nullptr) return;
+    refreshDebugPanel();
+    lv_obj_clear_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(ui.debugPanel);
+}
+void hideDebugPanel() {
+    if (ui.debugPanel != nullptr) lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
+}
+void onMainGesture(lv_event_t*) {
+    lv_indev_t* indev = lv_indev_active();
+    if (indev == nullptr) return;
+    const lv_dir_t direction = lv_indev_get_gesture_dir(indev);
+    if (direction == LV_DIR_LEFT) showDebugPanel();
+    else if (direction == LV_DIR_RIGHT) selectNextAction();
+}
+void onDebugGesture(lv_event_t*) {
+    lv_indev_t* indev = lv_indev_active();
+    if (indev != nullptr && lv_indev_get_gesture_dir(indev) == LV_DIR_RIGHT) hideDebugPanel();
+}
 void onBodyTouched(lv_event_t*) {
     if (pet.applyInteraction(Interaction::Pet)) {
         messageOverride = "THAT'S NICE";
@@ -154,27 +204,32 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_set_style_shadow_opa(ui.body, 45, LV_PART_MAIN);
     lv_obj_set_style_shadow_color(ui.body, color(0x0A151C), LV_PART_MAIN);
     lv_obj_add_flag(ui.body, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui.body, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(ui.body, onBodyTouched, LV_EVENT_CLICKED, nullptr);
 
     for (int i = 0; i < 2; ++i) {
         ui.eyes[i] = lv_obj_create(ui.body);
+        lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
         makeFlatObject(ui.eyes[i], 0xF5F7F4, LV_RADIUS_CIRCLE);
         lv_obj_set_style_border_width(ui.eyes[i], 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(ui.eyes[i], color(0xDCE5E1), LV_PART_MAIN);
 
         ui.pupils[i] = lv_obj_create(ui.eyes[i]);
+        lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
         makeFlatObject(ui.pupils[i], 0x182630, LV_RADIUS_CIRCLE);
 
         ui.brows[i] = lv_obj_create(ui.body);
+        lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_GESTURE_BUBBLE);
         makeFlatObject(ui.brows[i], 0x347E70, LV_RADIUS_CIRCLE);
         lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
     }
 
     ui.mouth = lv_obj_create(ui.body);
+    lv_obj_add_flag(ui.mouth, LV_OBJ_FLAG_GESTURE_BUBBLE);
     makeFlatObject(ui.mouth, 0x25333A, LV_RADIUS_CIRCLE);
 
-    lv_obj_set_size(ui.body, 250, 220);
-    lv_obj_set_pos(ui.body, 108, 130);
+    lv_obj_set_size(ui.body, 260, 232);
+    lv_obj_set_pos(ui.body, 103, 104);
     lv_obj_set_size(ui.eyes[0], 56, 62);
     lv_obj_set_size(ui.eyes[1], 56, 62);
     lv_obj_set_pos(ui.eyes[0], 48, 68);
@@ -192,28 +247,52 @@ void createUi() {
     lv_obj_set_style_bg_color(screen, color(0x111B24), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
-
-    lv_obj_t* title = makeLabel(screen, "EVOLVING GARDEN", &lv_font_montserrat_16, 0xEAF2EF);
-    lv_obj_set_pos(title, 0, 15);
-    lv_obj_set_width(title, 466);
-
-    lv_obj_t* subtitle = makeLabel(screen, "A LITTLE LIFE, RIGHT HERE", &lv_font_montserrat_12, 0x91AAA4);
-    lv_obj_set_pos(subtitle, 0, 39);
-    lv_obj_set_width(subtitle, 466);
+    lv_obj_add_event_cb(screen, onMainGesture, LV_EVENT_GESTURE, nullptr);
 
     createCreature(screen);
 
     ui.status = makeLabel(screen, "WANDERING", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
-    lv_obj_set_pos(ui.status, 23, 361);
+    lv_obj_set_pos(ui.status, 23, 354);
 
-    createButton(screen, 38, &buttonData[0], "PET", 0xB7E3D1);
-    createButton(screen, 177, &buttonData[1], "FEED", 0xE5C98F);
-    createButton(screen, 316, &buttonData[2], "DISCOVER", 0xB9CAE9);
+    ui.actionButton = lv_button_create(screen);
+    lv_obj_set_size(ui.actionButton, 280, 66);
+    lv_obj_set_pos(ui.actionButton, 93, 384);
+    lv_obj_set_style_bg_color(ui.actionButton, color(actionOptions[0].buttonColor), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.actionButton, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.actionButton, 24, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.actionButton, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(ui.actionButton, 0, LV_PART_MAIN);
+    lv_obj_add_flag(ui.actionButton, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui.actionButton, onActionClicked, LV_EVENT_CLICKED, nullptr);
 
-    lv_obj_t* footer = makeLabel(screen, "TAP THE CREATURE TOO", &lv_font_montserrat_12, 0x728A85);
-    lv_obj_set_width(footer, 466);
-    lv_obj_set_pos(footer, 0, 449);
+    ui.actionLabel = makeLabel(ui.actionButton, "PET", &lv_font_montserrat_18, 0x14252C);
+    lv_obj_center(ui.actionLabel);
+    lv_obj_add_flag(ui.actionLabel, LV_OBJ_FLAG_GESTURE_BUBBLE);
+
+    ui.debugPanel = lv_obj_create(screen);
+    lv_obj_remove_style_all(ui.debugPanel);
+    lv_obj_set_size(ui.debugPanel, 466, 466);
+    lv_obj_set_pos(ui.debugPanel, 0, 0);
+    lv_obj_set_style_bg_color(ui.debugPanel, color(0x111B24), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.debugPanel, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.debugPanel, 30, LV_PART_MAIN);
+    lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(ui.debugPanel, onDebugGesture, LV_EVENT_GESTURE, nullptr);
+
+    lv_obj_t* debugTitle = makeLabel(ui.debugPanel, "CREATURE LAB", &lv_font_montserrat_18, 0xEAF2EF);
+    lv_obj_set_width(debugTitle, 406);
+    lv_obj_set_pos(debugTitle, 0, 8);
+    ui.debugLabel = makeLabel(ui.debugPanel, "", &lv_font_montserrat_14, 0xBDE5D5);
+    lv_obj_set_width(ui.debugLabel, 406);
+    lv_obj_set_pos(ui.debugLabel, 0, 72);
+    lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_label_set_long_mode(ui.debugLabel, LV_LABEL_LONG_WRAP);
+    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "SWIPE RIGHT TO RETURN", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_set_width(debugHint, 406);
+    lv_obj_set_pos(debugHint, 0, 408);
+    refreshDebugPanel();
 }
 
 void updateCreatureVisuals() {
@@ -240,15 +319,16 @@ void updateCreatureVisuals() {
     const bool curiousFace = reaction == Reaction::Curious
         || pet.emotions().value(Emotion::Curiosity) > 48.0F;
 
-    float bodyX = 108.0F;
-    float bodyY = 130.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
+    float bodyX = 103.0F;
+    float bodyY = 104.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     if (happyFace) bodyY -= std::abs(std::sin(phase * 8.0F)) * 8.0F * std::max(0.25F, reactionPower);
     if (afraidFace) bodyX += std::sin(phase * 24.0F) * (exaggerated ? 6.0F : 3.0F);
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
     if (reaction == Reaction::Curious) bodyX += 3.5F * reactionPower;
 
-    const int bodyWidth = static_cast<int>(236.0F * (0.88F + genes.bodyWidth * 0.0024F));
-    const int bodyHeight = static_cast<int>(210.0F * (0.88F + genes.bodyHeight * 0.0024F));
+    const int bodyWidth = static_cast<int>(260.0F * (0.88F + genes.bodyWidth * 0.0024F));
+    const int bodyHeight = static_cast<int>(232.0F * (0.88F + genes.bodyHeight * 0.0024F));
+    bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F;
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
     lv_obj_set_pos(ui.body, static_cast<int>(bodyX), static_cast<int>(bodyY));
 
@@ -350,25 +430,64 @@ void updateCreatureVisuals() {
     }
 }
 
+audio::Cue cueForReaction(Reaction reaction) {
+    switch (reaction) {
+    case Reaction::Happy: return audio::Cue::Happy;
+    case Reaction::Sad: return audio::Cue::Sad;
+    case Reaction::Angry: return audio::Cue::Angry;
+    case Reaction::Fearful: return audio::Cue::Fearful;
+    case Reaction::Surprised: return audio::Cue::Surprised;
+    case Reaction::Curious: return audio::Cue::Curious;
+    case Reaction::Affectionate: return audio::Cue::Affectionate;
+    case Reaction::Disgusted: return audio::Cue::Disgusted;
+    case Reaction::None: break;
+    }
+    return audio::Cue::Button;
+}
+
 void petTimer(lv_timer_t*) {
     animationTime += FrameStepSeconds;
+    float soundIntensity = 0.0F;
+    float soundDuration = 0.0F;
+    if (audio::consumeSoundEvent(soundIntensity, soundDuration)) {
+        pet.applySoundStimulus(soundIntensity, soundDuration);
+    }
     pet.update(FrameStepSeconds);
+
+    const Reaction currentReaction = pet.reaction().kind();
+    if (currentReaction == Reaction::None) lastAudioReaction = Reaction::None;
+    else if (currentReaction != lastAudioReaction) {
+        audio::play(cueForReaction(currentReaction));
+        lastAudioReaction = currentReaction;
+    }
+
     updateCreatureVisuals();
+    if (ui.debugPanel != nullptr
+        && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)
+        && animationTime >= nextDebugRefresh) {
+        refreshDebugPanel();
+        nextDebugRefresh = animationTime + 0.20F;
+    }
 }
 
 } // namespace
 
 extern "C" void app_main(void) {
     ESP_LOGI(Tag, "Starting EvolvingGarden on ESP32-S3-Touch-AMOLED-1.75C");
-
-    // The official Waveshare BSP initializes the CO5300 display, CST9217 touch
-    // controller, LVGL port, and the required display buffers.
-    bsp_display_start();
+    if (bsp_display_start() == nullptr) {
+        ESP_LOGE(Tag, "Display initialization failed");
+        return;
+    }
+    audio::initialize();
 
     bsp_display_lock(-1);
+    if (lv_indev_t* indev = bsp_display_get_input_dev()) {
+        lv_indev_set_gesture_min_distance(indev, 42);
+        lv_indev_set_gesture_min_velocity(indev, 100);
+    }
     createUi();
     lv_timer_create(petTimer, 33, nullptr);
     bsp_display_unlock();
 
-    ESP_LOGI(Tag, "Pet UI is ready. Touch the creature or use the three buttons.");
+    ESP_LOGI(Tag, "Ready. Tap the action button; swipe right to cycle actions, left for debug.");
 }
