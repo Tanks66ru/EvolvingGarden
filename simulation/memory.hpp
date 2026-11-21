@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,10 @@ public:
     std::size_t size() const { return size_; }
     const MemoryEvent& at(std::size_t index) const { return events_[index]; }
     const std::array<MemoryEvent, Capacity>& entries() const { return events_; }
+    void restore(const std::array<MemoryEvent, Capacity>& entries, std::size_t count) {
+        events_ = entries;
+        size_ = std::min(count, Capacity);
+    }
 private:
     std::array<MemoryEvent, Capacity> events_{};
     std::size_t size_ = 0;
