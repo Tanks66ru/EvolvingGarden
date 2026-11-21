@@ -60,7 +60,7 @@ public:
     bool enjoysSparring() const { return genome_.personality.friendliness <= -20; }
 
     // Walking-like movement is supplied by the physical sensor layer.
-    // Every ten real steps can produce a discovery.
+    // Every ten real steps produces a discovery independently of UI cooldowns.
     bool registerSteps(std::uint32_t count) {
         if (count == 0) return false;
 
@@ -69,11 +69,18 @@ public:
         emotions_.add(Emotion::Joy, std::min(5.0F, static_cast<float>(count) * 0.32F));
         emotions_.add(Emotion::Curiosity, std::min(4.0F, static_cast<float>(count) * 0.28F));
 
-        bool discovered = false;
-        for (std::uint32_t milestone = previousMilestone; milestone < stepCount_ / 10U; ++milestone) {
-            if (applyInteraction(Interaction::Novelty)) discovered = true;
+        const std::uint32_t discoveries = stepCount_ / 10U - previousMilestone;
+        for (std::uint32_t i = 0; i < discoveries; ++i) {
+            emotions_.add(Emotion::Joy, 14.0F);
+            emotions_.add(Emotion::Curiosity, 12.0F);
+            needs_.boredom = clampPercent(needs_.boredom - 8.0F);
+            affectionToPlayer_ = clampPercent(affectionToPlayer_ + 0.18F);
+            reaction_.trigger(Reaction::Curious, 72.0F, 1.0F);
+            remember(EventType::NoveltyDiscovered, 22, 68);
+            checkBondMilestone();
+            updateMood(0.12F);
         }
-        return discovered;
+        return discoveries > 0;
     }
 
     float cooldownRemaining(Interaction interaction) const {

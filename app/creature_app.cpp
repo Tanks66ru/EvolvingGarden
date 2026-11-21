@@ -446,7 +446,7 @@ void createUi() {
     lv_obj_t* closeLabel = makeLabel(ui.debugCloseButton, "BACK", &lv_font_montserrat_12, 0xEAF2EF);
     lv_obj_center(closeLabel);
 
-    ui.debugLabel = makeLabel(ui.debugPanel, "", &lv_font_montserrat_14, 0xBDE5D5);
+    ui.debugLabel = makeLabel(ui.debugPanel, "", &lv_font_montserrat_12, 0xBDE5D5);
     lv_obj_set_width(ui.debugLabel, 430);
     lv_obj_set_pos(ui.debugLabel, 0, 54);
     lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
