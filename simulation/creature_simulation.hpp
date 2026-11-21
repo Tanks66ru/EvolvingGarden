@@ -1,5 +1,6 @@
 #pragma once
 #include "creatures/genome.hpp"
+#include "core/random.hpp"
 #include "simulation/emotions.hpp"
 #include "simulation/memory.hpp"
 #include "simulation/reactions.hpp"
@@ -8,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <random>
 namespace evolvinggarden {
 struct CreatureNeeds {
     float hunger = 24.0F;
@@ -347,16 +347,14 @@ private:
             {Action::Observe, curiosity * 30.0F + (1.0F - activity) * 8.0F},
             {Action::Idle, 18.0F + (1.0F - activity) * 8.0F}
         };
-        std::uniform_real_distribution<float> variation(-3.0F, 3.0F);
         std::size_t bestIndex = 0;
         float bestScore = -100000.0F;
         for (std::size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
-            const float score = candidates[i].score + variation(random_);
+            const float score = candidates[i].score + random_.range(-3.0F, 3.0F);
             if (score > bestScore) { bestScore = score; bestIndex = i; }
         }
         action_ = candidates[bestIndex].action;
-        std::uniform_real_distribution<float> duration(2.5F, 6.0F);
-        actionTimer_ = duration(random_);
+        actionTimer_ = random_.range(2.5F, 6.0F);
     }
 
     void applyAction(float dt) {
@@ -420,6 +418,6 @@ private:
     bool hasSignificantEvent_ = false;
     bool hasForegroundReward_ = false;
     bool inForeground_ = false;
-    std::mt19937 random_;
+    Random32 random_;
 };
 }

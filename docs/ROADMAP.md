@@ -27,6 +27,9 @@
 - [ ] Save and load experiment data.
 
 ## Milestone 4: Embedded client
-- [ ] Define a hardware-independent simulation API.
-- [ ] Profile memory and CPU requirements.
-- [ ] Port the supported simulation subset to ESP32-S3.
+- [x] Add a separate ESP-IDF project for Waveshare ESP32-S3-Touch-AMOLED-1.75C.
+- [x] Reuse the shared simulation/genome headers on the embedded target.
+- [x] Add the first LVGL pet screen with touch interactions and procedural facial/body animation.
+- [ ] Build with the user's local ESP-IDF toolchain and verify on the physical board.
+- [ ] Integrate QMI8658 motion input and microphone events.
+- [ ] Profile memory, CPU use, and display frame rate on hardware.

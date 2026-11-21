@@ -84,3 +84,11 @@ The simulation layer must remain independent of Raylib so it can be reused by fu
 ## Current limitations
 
 This is still a prototype. The environment is represented by test interactions, and the behavior model is intentionally small. Breeding, mutation execution, multiple simultaneously simulated creatures, save files and physical sensor input are not implemented yet.
+
+## ESP32-S3 firmware prototype
+
+A separate ESP-IDF application now targets the Waveshare ESP32-S3-Touch-AMOLED-1.75C. It uses the official Waveshare managed BSP and LVGL 9, and reuses the same simulation/genome code as the desktop prototype.
+
+The first hardware milestone displays one animated procedural pet, supports touch interaction (pet, feed, discover), and reuses the shared emotions, reactions, needs, cooldowns, and personality logic. It does not yet read the microphone or QMI8658 motion sensor.
+
+See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for setup, build, and flashing instructions. This target has not yet been validated on the user's physical board.
