@@ -307,19 +307,19 @@ void onCreaturePointer(lv_event_t* event) {
 void createCreature(lv_obj_t* parent) {
     // Appendages are created first so the body is drawn over their roots.
     ui.appendages[0] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[0], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_flag(ui.appendages[0], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[0], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[0], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[0], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[1] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[1], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_flag(ui.appendages[1], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[1], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[1], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[1], 0x40977F, LV_RADIUS_CIRCLE);
 
     ui.appendages[2] = lv_obj_create(parent);
-    lv_obj_add_flag(ui.appendages[2], LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_flag(ui.appendages[2], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[2], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[2], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[2], 0x40977F, LV_RADIUS_CIRCLE);
@@ -331,7 +331,7 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_set_style_shadow_width(ui.body, 18, LV_PART_MAIN);
     lv_obj_set_style_shadow_opa(ui.body, 45, LV_PART_MAIN);
     lv_obj_set_style_shadow_color(ui.body, color(0x0A151C), LV_PART_MAIN);
-    lv_obj_add_flag(ui.body, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_flag(ui.body, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.body, onCreaturePointer, LV_EVENT_ALL, nullptr);
 
