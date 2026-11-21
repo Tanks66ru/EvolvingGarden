@@ -6,13 +6,13 @@ Target: Waveshare ESP32-S3-Touch-AMOLED-1.75C, 466 x 466 AMOLED.
 
 - **FEED button:** feed the creature. This is the only on-screen gameplay button.
 - **Tap the creature or empty main screen:** hit it. Creatures with low friendliness treat a hit as sparring and dodge/counter; friendly creatures become angry or frightened.
-- **Circle around the creature:** pet it. Each completed circle can trigger another petting response.
+- **Circle around the creature:** pet it. Clockwise and counter-clockwise circles are both accepted.
 - **Steps:** the QMI8658 accelerometer detects walking-like movement. Every ten counted steps trigger a discovery.
 - **Shake:** a strong, short movement burst triggers a surprise/play response.
 - **Tilt:** holding the board at a noticeable angle triggers a balance/curiosity response.
 - **Rotate:** a quick rotation around the screen normal triggers a separate surprise response.
 - **Face-down sleep:** after the board is stable with the screen facing down for about 1.5 seconds, AMOLED brightness is set to zero. Lifting or touching the board wakes the screen.
-- **LAB / BACK:** LAB opens diagnostics. BACK closes them. The debug panel cannot scroll.
+- **BOOT side button:** opens or closes diagnostics. It is GPIO0, active-low; short-press BOOT while the application is running. Holding BOOT during reset still enters the ESP32 download mode. BACK remains available on the panel.
 
 The built-in microphone sound-burst detection and reaction audio remain active.
 
@@ -26,11 +26,17 @@ This initial sleep implementation blanks the AMOLED while keeping the ESP32 and 
 
 The step detector is a software heuristic based on accelerometer pulses and a cooldown. Its sensitivity will need physical calibration later.
 
+## Save data
+
+A versioned simulation snapshot is stored in ESP-IDF NVS. It includes the genome, needs, emotions, memory journal, reaction, action, cooldowns, relationship, simulation timers, progression counters, random-generator state and lifetime step count. Interaction/step changes request a throttled save, and a periodic checkpoint stores passive need and mood changes. Flash writes are rate-limited to avoid wearing the storage unnecessarily.
+
+
 ## Custom sounds
 
 Place optional files in `assets/sounds`:
 
 - button_click.wav
+- hit_impact.wav (optional; a synthesized low thump is used when this file is absent)
 - reaction_happy.wav
 - reaction_sad.wav
 - reaction_angry.wav
@@ -68,5 +74,6 @@ Flash using the port shown in Device Manager (the board was previously detected 
 - The same creature simulation, expressions, procedural geometry and LVGL widgets are shared by the firmware.
 - Audio uses the board's ES7210 microphone ADC and ES8311 speaker codec through the official BSP.
 - The onboard microphones detect sound bursts only; there is no speech recognition.
+- The board has no vibration motor, so hit feedback uses the display animation and speaker.
 - Microphone events are suppressed while the speaker is playing to reduce feedback.
 - If the SPIFFS partition cannot be mounted, synthesized fallback cues remain available.
