@@ -49,9 +49,9 @@ int selectedAction = 0;
 Reaction lastAudioReaction = Reaction::None;
 
 ActionOption actionOptions[] = {
-    {Interaction::Pet, "PET", "THAT'S NICE", 0xB7E3D1},
-    {Interaction::Feed, "FEED", "YUM!", 0xE5C98F},
-    {Interaction::Novelty, "DISCOVER", "WHAT IS THAT?", 0xB9CAE9}
+    {Interaction::Pet, "PET   < >", "THAT'S NICE", 0xB7E3D1},
+    {Interaction::Feed, "FEED   < >", "YUM!", 0xE5C98F},
+    {Interaction::Novelty, "DISCOVER   < >", "WHAT IS THAT?", 0xB9CAE9}
 };
 
 lv_color_t color(std::uint32_t hex) {
