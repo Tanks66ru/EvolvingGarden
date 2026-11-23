@@ -5,6 +5,9 @@ namespace evolvinggarden::app {
 // Call after LVGL and the display driver are initialized, while holding the LVGL lock.
 void initialize();
 
+// Publish the latest AXP2101 fuel-gauge reading. -1 means unavailable.
+void setBatteryStatus(int percent, bool charging);
+
 // Advance simulation and refresh the shared LVGL interface.
 void update(float deltaSeconds);
 
