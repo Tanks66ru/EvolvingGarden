@@ -549,6 +549,8 @@ void createUi() {
     lv_obj_set_style_border_width(ui.menuPanel, 2, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.menuPanel, color(0x4F8D79), LV_PART_MAIN);
     lv_obj_set_style_pad_all(ui.menuPanel, 0, LV_PART_MAIN);
+    lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui.menuPanel, onScreenTouch, LV_EVENT_PRESSED, nullptr);
     lv_obj_clear_flag(ui.menuPanel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
 
