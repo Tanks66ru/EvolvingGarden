@@ -59,8 +59,8 @@ struct CreatureTouchGesture {
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
 face_t pipEyeFace{};
-constexpr int PipEyeCanvasWidth = 288;
-constexpr int PipEyeCanvasHeight = 176;
+constexpr int PipEyeCanvasWidth = 360;
+constexpr int PipEyeCanvasHeight = 200;
 enum class LabPage : std::uint8_t { Device, Creature, Gens };
 LabPage activeLabPage = LabPage::Device;
 int deviceBatteryPercent = -1;
@@ -634,7 +634,7 @@ void createCreature(lv_obj_t* parent) {
         if (ui.eyeCanvas != nullptr) {
             lv_canvas_set_draw_buf(ui.eyeCanvas, ui.eyeBuffer);
             lv_obj_set_size(ui.eyeCanvas, PipEyeCanvasWidth, PipEyeCanvasHeight);
-            lv_obj_set_pos(ui.eyeCanvas, 0, 70);
+            lv_obj_set_pos(ui.eyeCanvas, 16, 87);
             lv_obj_clear_flag(ui.eyeCanvas, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_add_flag(ui.eyeCanvas, LV_OBJ_FLAG_EVENT_BUBBLE);
             pipEyeFace.color = 0xFFFF;
@@ -725,7 +725,7 @@ void createUi() {
 
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
-    lv_obj_set_pos(ui.status, 23, 440);
+    lv_obj_set_pos(ui.status, 23, 432);
 
     ui.debugPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.debugPanel);
@@ -861,6 +861,7 @@ void createUi() {
 
 void updatePipEyeCanvas(
     int bodyWidth,
+    int bodyHeight,
     float phase,
     float gazeX,
     float gazeY,
@@ -876,10 +877,11 @@ void updatePipEyeCanvas(
     if (ui.eyeCanvas == nullptr || ui.eyeBuffer == nullptr) return;
 
     const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
-    constexpr int canvasY = 70;
+    const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
     lv_obj_set_pos(ui.eyeCanvas, canvasX, canvasY);
 
-    // Repaint the body-coloured canvas and reset Pip's old rectangles to avoid trails.
+    // Keep the canvas aligned with the body colour; Pip's renderer paints the
+    // same lit ellipsoid eyes and surface-following pupils used by Pip-KeyPet.
     auto* pixels = reinterpret_cast<std::uint16_t*>(ui.eyeBuffer->data);
     const std::uint16_t bodyPixel = lv_color_to_u16(
         color(hitFlash ? 0xF1D39A : 0x427E83));
@@ -889,58 +891,104 @@ void updatePipEyeCanvas(
     }
 
     pipEyeFace.color = 0xFFFF;
-    pipEyeFace.pupil_color = 0x18C3;
+    pipEyeFace.pupil_color = 0x18C3; // Pip's original #1C1C1C, not pure black.
     pipEyeFace.shading = 0.0F;
     pipEyeFace.blush = 0.0F;
 
-    const float geneScale = 0.94F
-        + static_cast<float>(pet.genome().morphology.eyeSize) * 0.0012F;
-    float eyeHeightScale = 1.0F;
-    if (angryFace || disgustedFace) eyeHeightScale = 0.88F;
-    else if (happyFace) eyeHeightScale = 1.05F;
-    else if (sadFace) eyeHeightScale = 0.96F;
-    else if (surprisedFace || afraidFace) eyeHeightScale = 1.16F;
+    // Pip uses 118 x 138 neutral eye shapes, scaled by EYE_SCALE=1.45.
+    // The 360 px canvas is a 0.7725 scale of Pip's 466 px face coordinate space.
+    constexpr float PipScreenScale =
+        static_cast<float>(PipEyeCanvasWidth) / 466.0F;
+    constexpr float PipEyeScale = 1.45F;
+    constexpr float PipSpread = 0.55F;
+    constexpr float PipHeadRadius =
+        (237.0F / (2.0F * 0.5227F)) * PipScreenScale;
 
-    const float eyeWidth = 132.0F * geneScale;
-    const float eyeHeight = 130.0F * geneScale * eyeHeightScale;
-    float lid = 0.16F;
-    float lidTilt = 0.24F;
-    float taper = 0.20F;
-    if (angryFace) { lid = 0.33F; lidTilt = 0.58F; taper = 0.36F; }
-    else if (disgustedFace) { lid = 0.29F; lidTilt = 0.14F; taper = 0.22F; }
-    else if (sadFace) { lid = 0.28F; lidTilt = -0.25F; taper = 0.14F; }
-    else if (happyFace) { lid = 0.04F; lidTilt = 0.02F; taper = -0.06F; }
-    else if (surprisedFace || afraidFace) { lid = 0.02F; lidTilt = -0.12F; taper = -0.05F; }
-    else if (curiousFace) { lid = 0.10F; lidTilt = 0.18F; taper = 0.12F; }
+    float shapeWidth = 118.0F;
+    float shapeHeight = 138.0F;
+    float shapeRoll = 0.0F;
+    float shapeTaper = 0.0F;
+    float lid = 0.0F;
+    float lidTilt = 0.0F;
+    float smile = 0.0F;
+    float pupilWidth = 0.40F;
+    float pupilHeight = 0.44F;
+
+    // These are the corresponding shape_t values from Pip's mood table.
+    if (angryFace) {
+        shapeWidth = 114.0F; shapeHeight = 114.0F;
+        shapeRoll = 0.16F; shapeTaper = 0.30F;
+        lid = 0.30F; lidTilt = 0.45F;
+        pupilWidth = 0.20F; pupilHeight = 0.40F;
+    } else if (disgustedFace) {
+        shapeWidth = 118.0F; shapeHeight = 104.0F;
+        shapeRoll = -0.10F; lid = 0.30F; lidTilt = -0.10F;
+        smile = 0.25F; pupilWidth = 0.32F; pupilHeight = 0.34F;
+    } else if (sadFace) {
+        shapeWidth = 112.0F; shapeHeight = 126.0F;
+        shapeRoll = -0.14F; lid = 0.22F; lidTilt = -0.35F;
+        pupilWidth = 0.52F; pupilHeight = 0.56F;
+    } else if (happyFace) {
+        shapeWidth = 118.0F; shapeHeight = 124.0F;
+        shapeRoll = -0.06F; shapeTaper = -0.10F;
+        smile = 0.42F; pupilWidth = 0.36F; pupilHeight = 0.38F;
+    } else if (surprisedFace) {
+        shapeWidth = 124.0F; shapeHeight = 160.0F;
+        shapeTaper = -0.05F; pupilWidth = 0.24F; pupilHeight = 0.26F;
+    } else if (afraidFace) {
+        shapeWidth = 126.0F; shapeHeight = 160.0F;
+        shapeRoll = -0.10F; shapeTaper = -0.10F;
+        lid = 0.08F; lidTilt = -0.30F;
+        pupilWidth = 0.18F; pupilHeight = 0.20F;
+    } else if (curiousFace) {
+        shapeWidth = 124.0F; shapeHeight = 148.0F;
+        shapeTaper = -0.05F; pupilWidth = 0.50F; pupilHeight = 0.54F;
+    }
+
+    const float headYaw = std::clamp(gazeX * 0.012F, -0.10F, 0.10F);
+    const float headPitch = std::clamp(gazeY * 0.010F, -0.06F, 0.06F);
+    float headRoll = std::sin(phase * 0.17F) * 0.015F;
+    if (happyFace) headRoll = 0.12F;
+    else if (sadFace) headRoll = -0.10F;
+    else if (curiousFace) headRoll = 0.16F;
+
+    // Keep Pip's natural blink cadence, but close the lid rather than collapsing
+    // the mesh to zero height, which is safer for this small embedded renderer.
+    const float blinkPhase = std::fmod(
+        phase + static_cast<float>(pet.genome().seed % 31U) * 0.07F, 4.2F);
+    const bool blink = blinkPhase > 3.92F && blinkPhase < 4.12F;
+    const float blinkLid = blink ? 0.94F : 0.0F;
 
     for (int i = 0; i < 2; ++i) {
-        const float side = i == 0 ? -1.0F : 1.0F;
+        const float side = i ? 1.0F : -1.0F;
+        const float phi = headYaw + side * PipSpread;
+        const float perspective = PipEyeScale
+            * (1.0F + 0.35F * (std::cos(phi) - 0.8525F));
+        const float xOffset = PipHeadRadius * std::sin(phi);
+        const float yOffset = 240.0F * PipScreenScale * std::sin(headPitch);
+
         eye_t& eye = pipEyeFace.eye[i];
-        eye.x = i == 0 ? 72.0F : 216.0F;
-        eye.y = 88.0F + (sadFace ? 2.0F : 0.0F);
-        eye.w = eyeWidth;
-        eye.h = eyeHeight;
-        eye.depth = eyeWidth * 0.48F;
-        eye.yaw = std::clamp(gazeX * 0.006F, -0.14F, 0.14F);
-        eye.pitch = std::clamp(gazeY * 0.006F, -0.12F, 0.12F);
-        eye.roll = side * (angryFace ? 0.17F : 0.10F);
-        eye.taper = taper;
-        eye.lid = lid;
+        eye.w = shapeWidth * perspective * PipScreenScale;
+        eye.h = shapeHeight * perspective * PipScreenScale;
+        eye.depth = shapeWidth * perspective * PipScreenScale * 0.5F;
+        eye.x = PipEyeCanvasWidth * 0.5F + xOffset;
+        eye.y = PipEyeCanvasHeight * 0.5F + yOffset;
+        eye.yaw = headYaw + side * PipSpread * 0.5F;
+        eye.pitch = headPitch;
+        eye.roll = headRoll - side * shapeRoll;
+        eye.taper = shapeTaper;
+        eye.lid = std::max(lid, blinkLid);
         eye.tilt = -side * lidTilt;
-        eye.smile = happyFace ? 0.22F : 0.0F;
-        eye.look_x = std::clamp(gazeX * 0.014F, -0.30F, 0.30F);
-        eye.look_y = std::clamp(gazeY * 0.014F, -0.24F, 0.24F);
-        eye.pw = (angryFace || disgustedFace) ? 0.23F
-            : (afraidFace || surprisedFace) ? 0.20F
-            : happyFace ? 0.38F : 0.34F;
-        eye.ph = (angryFace || disgustedFace) ? 0.34F
-            : (afraidFace || surprisedFace) ? 0.24F
-            : happyFace ? 0.40F : 0.40F;
+        eye.smile = smile;
+        eye.look_x = std::clamp(gazeX * 0.040F - eye.yaw, -0.85F, 0.85F);
+        eye.look_y = std::clamp(gazeY * 0.035F - eye.pitch, -0.70F, 0.70F);
+        eye.pw = pupilWidth;
+        eye.ph = pupilHeight;
         eye.square = 0.0F;
         eye.heart = 0.0F;
         eye.wobble = 0.022F * std::min(eye.w, eye.h) * 0.5F;
         eye.wob_t = phase + static_cast<float>(i) * 7.3F;
-        eye.glint = 0.95F;
+        eye.glint = 0.0F;
         eye.spiral = 0.0F;
         eye.veins = 0.0F;
         eye.wet = sadFace ? 0.18F : (afraidFace ? 0.08F : 0.0F);
@@ -1027,10 +1075,10 @@ void updateCreatureVisuals() {
     // Apply the same scale on both axes: the creature compresses and rebounds,
     // but its proportions never stretch sideways.
     const int bodyWidth = static_cast<int>(
-        (405.0F + static_cast<float>(genes.bodyWidth) * 0.15F) * hitScale);
+        392.0F * (0.94F + static_cast<float>(genes.bodyWidth) * 0.0011F) * hitScale);
     const int bodyHeight = static_cast<int>(
-        (394.0F + static_cast<float>(genes.bodyHeight) * 0.12F) * hitScale);
-    bodyY = 220.0F - static_cast<float>(bodyHeight) * 0.5F
+        374.0F * (0.94F + static_cast<float>(genes.bodyHeight) * 0.0011F) * hitScale);
+    bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
@@ -1087,21 +1135,24 @@ void updateCreatureVisuals() {
         gazeX = std::clamp(gazeX, -8.0F, 8.0F);
         gazeY = std::clamp(gazeY, -6.0F, 6.0F);
 
-        updatePipEyeCanvas(bodyWidth, phase, gazeX, gazeY,
+        updatePipEyeCanvas(bodyWidth, bodyHeight, phase, gazeX, gazeY,
             angryFace, sadFace, happyFace, afraidFace, surprisedFace,
             curiousFace, disgustedFace, hitFlash);
 
         // Hard, mirrored anime brows sit above the sculpted eyes.
         const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
-        constexpr int browWidth = 142;
-        const int browHeight = angryFace ? 13 : 10;
+        const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
+        constexpr int browWidth = 118;
+        const int browHeight = angryFace ? 12 : 8;
         for (int i = 0; i < 2; ++i) {
-            const int eyeCenterX = i == 0 ? 72 : 216;
+            const int eyeCenterX = i == 0 ? 89 : 271;
             lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
             lv_obj_set_size(ui.brows[i], browWidth, browHeight);
             lv_obj_set_style_transform_pivot_x(ui.brows[i], browWidth / 2, LV_PART_MAIN);
             lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
-            lv_obj_set_pos(ui.brows[i], canvasX + eyeCenterX - browWidth / 2, 70 + 88 - 72);
+            lv_obj_set_pos(ui.brows[i],
+                canvasX + eyeCenterX - browWidth / 2,
+                canvasY + 100 - browHeight - 8);
             const int browAngle = i == 0
                 ? (angryFace ? 215 : (happyFace ? 35 : 135))
                 : (angryFace ? -215 : (happyFace ? -35 : -135));
