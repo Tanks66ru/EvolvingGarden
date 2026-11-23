@@ -5,6 +5,8 @@
 #include "esp_err.h"
 #include "esp_lv_adapter.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lvgl.h"
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
@@ -171,6 +173,21 @@ void onFrame(lv_timer_t*) {
 
 } // namespace
 
+void initializeGardenUiTask(void*) {
+    // LVGL object creation and the first diagnostics refresh use more stack
+    // than ESP-IDF's small default app_main task provides.
+    bsp_display_lock(-1);
+    evolvinggarden::app::initialize();
+    lv_timer_create(onFrame, 33, nullptr);
+    bsp_display_unlock();
+
+    const UBaseType_t stackHighWatermark = uxTaskGetStackHighWaterMark(nullptr);
+    ESP_LOGI(Tag, "UI initialized; init-task stack high-water mark: %u bytes",
+        static_cast<unsigned>(stackHighWatermark));
+    ESP_LOGI(Tag, "Ready. PWR opens Garden menu; BOOT opens LAB; tap to hit; circle to pet.");
+    vTaskDelete(nullptr);
+}
+
 extern "C" void app_main(void) {
     ESP_LOGI(Tag, "Starting EvolvingGarden on ESP32-S3-Touch-AMOLED-1.75C");
     activeDisplay = bsp_display_start();
@@ -188,10 +205,10 @@ extern "C" void app_main(void) {
     evolvinggarden::motion::initialize();
     evolvinggarden::audio::initialize();
 
-    bsp_display_lock(-1);
-    evolvinggarden::app::initialize();
-    lv_timer_create(onFrame, 33, nullptr);
-    bsp_display_unlock();
-
-    ESP_LOGI(Tag, "Ready. PWR opens Garden menu; BOOT opens LAB; tap to hit; circle to pet.");
+    constexpr std::uint32_t InitTaskStackBytes = 8192;
+    const BaseType_t taskCreated = xTaskCreate(
+        initializeGardenUiTask, "garden_init", InitTaskStackBytes, nullptr, 5, nullptr);
+    if (taskCreated != pdPASS) {
+        ESP_LOGE(Tag, "Could not create UI initialization task");
+    }
 }
