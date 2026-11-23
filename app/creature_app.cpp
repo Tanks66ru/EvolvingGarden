@@ -266,8 +266,11 @@ void refreshDebugPanel() {
     const EmotionalState& emotions = pet.emotions();
     const motion::State sensor = motion::state();
     const Genome& genome = pet.genome();
-    char text[1500]{};
-    char batteryText[24]{};
+    // Reused by the single LVGL/UI task; keep the large formatting buffer off its stack.
+    static char text[1500];
+    static char batteryText[24];
+    text[0] = '\0';
+    batteryText[0] = '\0';
     if (deviceBatteryPercent < 0) std::snprintf(batteryText, sizeof(batteryText), "NOT DETECTED");
     else std::snprintf(batteryText, sizeof(batteryText), "%d%%", deviceBatteryPercent);
 
