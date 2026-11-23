@@ -163,7 +163,7 @@ public:
         noveltyCount_ = state.noveltyCount;
         foregroundVisits_ = state.foregroundVisits;
         stepCount_ = state.stepCount;
-        lastBondMilestone_ = clampValue(state.lastBondMilestone, 0, 100);
+        lastBondMilestone_ = clampValue<std::int32_t>(state.lastBondMilestone, 0, 100);
         hasSignificantEvent_ = state.hasSignificantEvent;
         hasForegroundReward_ = state.hasForegroundReward;
         inForeground_ = state.inForeground;
