@@ -48,6 +48,7 @@ set(EVOLVING_GARDEN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 add_executable(EvolvingGardenSimulator
     main.cpp
     ../app/creature_app.cpp
+    ../third_party/pip_face/face.c
     ../platform/desktop/audio.cpp
     ../platform/desktop/motion.cpp
 )
