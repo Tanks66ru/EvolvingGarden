@@ -305,7 +305,7 @@ void refreshDebugPanel() {
             "DEVICE STATUS\n\n"
             "BATTERY     %s\nCHARGING    %s\n"
             "MICROPHONE  %s  %u%%\nSPEAKER     %s\nVOLUME      %u%%\n"
-            "STORAGE     %s\nSAVE        %s\nMOTION      %s\n"
+            "STORAGE     %s\nGARDEN      %u/%u\nSAVE        %s\nMOTION      %s\n"
             "ORIENTATION %s\nDISPLAY     %s\n\n"
             "MOVEMENT\nSTEPS       %lu\nSHAKES      %lu\nTILTS       %lu\nROTATIONS   %lu\n\n"
             "SENSORS\nROLL        %+.1f deg\nPITCH       %+.1f deg\n"
@@ -315,7 +315,10 @@ void refreshDebugPanel() {
             static_cast<unsigned>(audio::microphoneLevelPercent()),
             audio::speakerReady() ? "READY" : "OFF",
             static_cast<unsigned>(audio::volumePercent()),
-            storageReady ? "READY" : "OFF", saveRequested ? "PENDING" : "CLEAN",
+            storageReady ? "READY" : "OFF",
+            static_cast<unsigned>(gardenState.count),
+            static_cast<unsigned>(persistence::MaximumGardenCreatures),
+            saveRequested ? "PENDING" : "CLEAN",
             sensor.ready ? "READY" : "OFF",
             sensor.orientationCalibrated ? "CALIBRATED" : "HOLD FLAT",
             sensor.screenSleeping ? "SLEEPING" : "AWAKE",
@@ -1550,18 +1553,6 @@ void updateCreatureVisuals() {
             lv_obj_set_pos(ui.secondaryHighlights[i], pupilWidth * 2 / 3, pupilHeight * 3 / 5);
         }
 
-        lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
-        const int browHeight = angryFace ? 13 : 10;
-        lv_obj_set_size(ui.brows[i], individualEyeWidth + 12, browHeight);
-        lv_obj_set_style_transform_pivot_x(ui.brows[i], (individualEyeWidth + 12) / 2, LV_PART_MAIN);
-        lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
-        lv_obj_set_pos(ui.brows[i], eyeX - 6, eyeY - (angryFace ? 9 : 14));
-        const int browAngle = i == 0
-            ? (angryFace ? 175 : (happyFace ? 35 : 80))
-            : (angryFace ? -175 : (happyFace ? -35 : -80));
-        lv_obj_set_style_transform_rotation(ui.brows[i], browAngle, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(ui.brows[i],
-            color(angryFace ? 0x15232D : 0x20343D), LV_PART_MAIN);
     }
 
 
