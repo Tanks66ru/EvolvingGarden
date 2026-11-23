@@ -18,6 +18,7 @@ idf_component_register(
         nvs_flash
         esp_driver_gpio
         esp_driver_i2c
+        esp_timer
 )
 
 spiffs_create_partition_image(
