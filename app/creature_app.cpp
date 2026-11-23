@@ -909,7 +909,9 @@ void createCreature(lv_obj_t* parent) {
         if (ui.eyeCanvas != nullptr) {
             lv_canvas_set_draw_buf(ui.eyeCanvas, ui.eyeBuffer);
             lv_obj_set_size(ui.eyeCanvas, PipEyeCanvasWidth, PipEyeCanvasHeight);
-            lv_obj_set_pos(ui.eyeCanvas, 16, 87);
+            lv_obj_set_pos(ui.eyeCanvas,
+                (392 - PipEyeCanvasWidth) / 2,
+                (374 - PipEyeCanvasHeight) / 2);
             lv_obj_clear_flag(ui.eyeCanvas, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_add_flag(ui.eyeCanvas, LV_OBJ_FLAG_EVENT_BUBBLE);
             pipEyeFace.color = 0xFFFF;
