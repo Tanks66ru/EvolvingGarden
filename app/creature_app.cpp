@@ -842,10 +842,14 @@ void update(float deltaSeconds) {
         lastAudioReaction = currentReaction;
     }
 
-    updateCreatureVisuals();
-    if (ui.debugPanel != nullptr
-        && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)
-        && animationTime >= nextDebugRefresh) {
+    const bool debugVisible = ui.debugPanel != nullptr
+        && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
+    const bool menuVisible = ui.menuPanel != nullptr
+        && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
+    if (!debugVisible && !menuVisible && !sensor.screenSleeping) {
+        updateCreatureVisuals();
+    }
+    if (debugVisible && animationTime >= nextDebugRefresh) {
         refreshDebugPanel();
         nextDebugRefresh = animationTime + 0.20F;
     }
