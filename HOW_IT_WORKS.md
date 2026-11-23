@@ -4,7 +4,7 @@ EvolvingGarden is a persistent virtual creature running on the Waveshare ESP32-S
 
 ## Runtime flow
 
-The ESP-IDF entry point initializes the display, physical BOOT key, QMI8658 motion sensor, audio codec and shared LVGL application. A 30 Hz timer polls the sensor and button, then advances the creature simulation and redraws the UI.
+The ESP-IDF entry point initializes the display, BOOT GPIO key, AXP2101 PWR key, QMI8658 motion sensor, audio codec and shared LVGL application. A 30 Hz timer polls the controls and sensor, then advances the creature simulation. LVGL software drawing is configured for both ESP32-S3 cores, and the firmware logs measured display refresh FPS.
 
 The source is separated by responsibility:
 
@@ -33,9 +33,10 @@ The source is separated by responsibility:
 | Tilt the board | Curiosity / balance response |
 | Rotate it around the screen normal | Rotation response |
 | Place it face-down and still | Blank the AMOLED after a short delay |
-| Physical BOOT button | Open or close the LAB diagnostics panel |
+| Physical PWR key (top) | Open or close the Garden menu |
+| Physical BOOT key (bottom) | Open or close LAB; while the menu is open, go Back |
 
-The BOOT button is GPIO0, active low, and is sampled while the application is running. Holding BOOT during reset remains the ESP32 download-mode procedure. The PWR key is not used by the application.
+The BOOT key is GPIO0, active low, and is sampled while the application is running. Holding BOOT during reset remains the ESP32 download-mode procedure. The top PWR key is read from the AXP2101 power-management IC over the BSP's existing I2C bus.
 
 The board does not provide a vibration motor. A hit therefore uses a low-frequency speaker thump, an expanding ring at the touch point, a brief body flash, squash and recoil animation. Creatures with a sparring personality dodge and counter-lunge.
 
@@ -77,4 +78,4 @@ idf.py build
 idf.py -p COM4 -b 460800 flash monitor
 ```
 
-The exact serial port may differ. See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for environment setup and troubleshooting.
+The exact serial port may differ. See [firmware/esp-idf/README.md](firmware/esp-idf/README.md) for environment setup and troubleshooting. The serial monitor reports display refresh FPS every two seconds; the configured software renderer uses two LVGL draw units.
