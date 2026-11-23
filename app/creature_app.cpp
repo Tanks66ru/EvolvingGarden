@@ -55,7 +55,7 @@ float nextDebugRefresh = 0.0F;
 float lastHitAnimation = -10.0F;
 float hitDirection = 1.0F;
 float hitPointX = 233.0F;
-float hitPointY = 220.0F;
+float hitPointY = 205.0F;
 float deviceRoll = 0.0F;
 bool storageReady = false;
 bool restoredFromSave = false;
@@ -337,7 +337,7 @@ void onCreaturePointer(lv_event_t* event) {
         creatureTouch.startY = y;
 
         const float offsetX = x - 233.0F;
-        const float offsetY = y - 220.0F;
+        const float offsetY = y - 205.0F;
         const float radius = std::sqrt(offsetX * offsetX + offsetY * offsetY);
         if (radius < 48.0F || radius > 158.0F) {
             creatureTouch.hasAngle = false;
@@ -626,7 +626,7 @@ void updateCreatureVisuals() {
     }
 
     float bodyX = 87.0F;
-    float bodyY = 88.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
+    float bodyY = 0.0F;
     if (happyFace) bodyY -= std::abs(std::sin(phase * 8.0F)) * 8.0F * std::max(0.25F, reactionPower);
     if (afraidFace) bodyX += std::sin(phase * 24.0F) * (exaggerated ? 6.0F : 3.0F);
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
@@ -638,6 +638,8 @@ void updateCreatureVisuals() {
         * (0.88F + genes.bodyWidth * 0.0024F) * (1.0F + squash));
     const int bodyHeight = static_cast<int>(260.0F
         * (0.88F + genes.bodyHeight * 0.0024F) * (1.0F - squash * 0.75F));
+    bodyY = 205.0F - static_cast<float>(bodyHeight) * 0.5F
+        + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
