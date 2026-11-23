@@ -164,5 +164,5 @@ extern "C" void app_main(void) {
     lv_timer_create(onFrame, 33, nullptr);
     bsp_display_unlock();
 
-    ESP_LOGI(Tag, "Ready. FEED button; tap to spar; circle to pet; BOOT toggles diagnostics.");
+    ESP_LOGI(Tag, "Ready. PWR opens Garden menu; BOOT opens LAB; tap to hit; circle to pet.");
 }
