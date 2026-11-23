@@ -440,18 +440,18 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_clear_flag(ui.mouth, LV_OBJ_FLAG_SCROLLABLE);
     makeFlatObject(ui.mouth, 0x25333A, LV_RADIUS_CIRCLE);
 
-    lv_obj_set_size(ui.body, 260, 232);
-    lv_obj_set_pos(ui.body, 103, 104);
-    lv_obj_set_size(ui.eyes[0], 56, 62);
-    lv_obj_set_size(ui.eyes[1], 56, 62);
-    lv_obj_set_pos(ui.eyes[0], 48, 68);
-    lv_obj_set_pos(ui.eyes[1], 146, 68);
-    lv_obj_set_size(ui.pupils[0], 19, 25);
-    lv_obj_set_size(ui.pupils[1], 19, 25);
-    lv_obj_set_pos(ui.pupils[0], 18, 19);
-    lv_obj_set_pos(ui.pupils[1], 18, 19);
-    lv_obj_set_size(ui.mouth, 34, 8);
-    lv_obj_set_pos(ui.mouth, 108, 157);
+    lv_obj_set_size(ui.body, 291, 260);
+    lv_obj_set_pos(ui.body, 87, 88);
+    lv_obj_set_size(ui.eyes[0], 66, 70);
+    lv_obj_set_size(ui.eyes[1], 64, 70);
+    lv_obj_set_pos(ui.eyes[0], 49, 76);
+    lv_obj_set_pos(ui.eyes[1], 169, 76);
+    lv_obj_set_size(ui.pupils[0], 22, 29);
+    lv_obj_set_size(ui.pupils[1], 22, 29);
+    lv_obj_set_pos(ui.pupils[0], 22, 20);
+    lv_obj_set_pos(ui.pupils[1], 21, 20);
+    lv_obj_set_size(ui.mouth, 38, 10);
+    lv_obj_set_pos(ui.mouth, 126, 187);
 }
 
 void createUi() {
@@ -618,8 +618,8 @@ void updateCreatureVisuals() {
         }
     }
 
-    float bodyX = 103.0F;
-    float bodyY = 104.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
+    float bodyX = 87.0F;
+    float bodyY = 88.0F + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     if (happyFace) bodyY -= std::abs(std::sin(phase * 8.0F)) * 8.0F * std::max(0.25F, reactionPower);
     if (afraidFace) bodyX += std::sin(phase * 24.0F) * (exaggerated ? 6.0F : 3.0F);
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
@@ -627,9 +627,9 @@ void updateCreatureVisuals() {
 
     const float squash = hitElapsed >= 0.0F && hitElapsed < 0.20F
         ? std::sin((hitElapsed / 0.20F) * 3.14159265F) * 0.11F : 0.0F;
-    const int bodyWidth = static_cast<int>(260.0F
+    const int bodyWidth = static_cast<int>(291.0F
         * (0.88F + genes.bodyWidth * 0.0024F) * (1.0F + squash));
-    const int bodyHeight = static_cast<int>(232.0F
+    const int bodyHeight = static_cast<int>(260.0F
         * (0.88F + genes.bodyHeight * 0.0024F) * (1.0F - squash * 0.75F));
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
@@ -658,11 +658,11 @@ void updateCreatureVisuals() {
     }
 
     const float eyeScale = 0.82F + static_cast<float>(genes.eyeSize) * 0.0032F;
-    const int eyeWidth = static_cast<int>(56.0F * eyeScale);
-    const int baseEyeHeight = static_cast<int>(61.0F * eyeScale);
-    const int eyeY = static_cast<int>(bodyHeight * 0.30F);
-    const int leftX = static_cast<int>(bodyWidth * 0.19F);
-    const int rightX = static_cast<int>(bodyWidth * 0.59F);
+    const int eyeWidth = static_cast<int>(64.0F * eyeScale);
+    const int baseEyeHeight = static_cast<int>(70.0F * eyeScale);
+    const int eyeY = static_cast<int>(bodyHeight * 0.29F);
+    const int leftX = static_cast<int>(bodyWidth * 0.17F);
+    const int rightX = static_cast<int>(bodyWidth * 0.58F);
 
     float gazeX = std::sin(phase * 0.72F) * 5.5F + std::sin(phase * 0.21F) * 2.0F;
     float gazeY = std::cos(phase * 0.51F) * 3.0F;
@@ -711,8 +711,8 @@ void updateCreatureVisuals() {
         }
     }
 
-    int mouthWidth = 34;
-    int mouthHeight = 8;
+    int mouthWidth = 38;
+    int mouthHeight = 10;
     int mouthY = static_cast<int>(bodyHeight * 0.72F);
     if (happyFace) { mouthWidth = 40; mouthHeight = 10; mouthY -= 2; }
     if (sadFace) { mouthWidth = 27; mouthHeight = 6; mouthY += 5; }
@@ -723,12 +723,6 @@ void updateCreatureVisuals() {
 
     lv_obj_set_size(ui.mouth, mouthWidth, mouthHeight);
     lv_obj_set_pos(ui.mouth, (bodyWidth - mouthWidth) / 2, mouthY);
-    if (surprisedFace || afraidFace || reaction == Reaction::Curious) {
-        lv_obj_set_style_bg_color(ui.mouth, color(0x25333A), LV_PART_MAIN);
-    } else {
-        lv_obj_set_style_bg_color(ui.mouth, color(0x25333A), LV_PART_MAIN);
-    }
-
     if (messageOverride != nullptr && animationTime < messageUntil) {
         setStatus(messageOverride);
     } else {
