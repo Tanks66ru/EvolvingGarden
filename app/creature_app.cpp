@@ -847,7 +847,7 @@ void createCreature(lv_obj_t* parent) {
     makeFlatObject(ui.appendages[0], 0x3D817B, LV_RADIUS_CIRCLE);
     lv_obj_set_style_border_width(ui.appendages[0], 3, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.appendages[0], color(0x21414C), LV_PART_MAIN);
-    lv_obj_set_style_radius(ui.appendages[0], 9, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[0], LV_RADIUS_CIRCLE, LV_PART_MAIN);
 
     ui.appendages[1] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[1], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
@@ -856,7 +856,7 @@ void createCreature(lv_obj_t* parent) {
     makeFlatObject(ui.appendages[1], 0x3D817B, LV_RADIUS_CIRCLE);
     lv_obj_set_style_border_width(ui.appendages[1], 3, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.appendages[1], color(0x21414C), LV_PART_MAIN);
-    lv_obj_set_style_radius(ui.appendages[1], 9, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[1], LV_RADIUS_CIRCLE, LV_PART_MAIN);
 
     ui.appendages[2] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[2], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
@@ -865,7 +865,7 @@ void createCreature(lv_obj_t* parent) {
     makeFlatObject(ui.appendages[2], 0x3D817B, LV_RADIUS_CIRCLE);
     lv_obj_set_style_border_width(ui.appendages[2], 3, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.appendages[2], color(0x21414C), LV_PART_MAIN);
-    lv_obj_set_style_radius(ui.appendages[2], 9, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[2], LV_RADIUS_CIRCLE, LV_PART_MAIN);
 
     ui.body = lv_obj_create(parent);
     makeFlatObject(ui.body, 0x427E83, LV_RADIUS_CIRCLE);
@@ -923,17 +923,13 @@ void createCreature(lv_obj_t* parent) {
         lv_obj_set_size(ui.secondaryHighlights[i], 4, 4);
         lv_obj_set_pos(ui.secondaryHighlights[i], 24, 29);
 
-        ui.brows[i] = lv_obj_create(ui.body);
-        lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_EVENT_BUBBLE);
-        lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.brows[i], 0x20343D, 4);
-        lv_obj_set_style_border_width(ui.brows[i], 0, LV_PART_MAIN);
+        if (ui.eyeCanvas != nullptr) {
+            lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.highlights[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_HIDDEN);
+        }
     }
-
-    ui.mouth = lv_obj_create(ui.body);
-    lv_obj_add_flag(ui.mouth, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_clear_flag(ui.mouth, LV_OBJ_FLAG_SCROLLABLE);
-    makeFlatObject(ui.mouth, 0x1C2A31, LV_RADIUS_CIRCLE);
 
     lv_obj_set_size(ui.body, 392, 374);
     lv_obj_set_pos(ui.body, 37, 46);
@@ -945,8 +941,6 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_set_size(ui.pupils[1], 42, 60);
     lv_obj_set_pos(ui.pupils[0], 21, 18);
     lv_obj_set_pos(ui.pupils[1], 20, 18);
-    lv_obj_set_size(ui.mouth, 44, 9);
-    lv_obj_set_pos(ui.mouth, 174, 269);
 }
 
 void createUi() {
@@ -1217,6 +1211,21 @@ void updatePipEyeCanvas(
 {
     if (ui.eyeCanvas == nullptr || ui.eyeBuffer == nullptr) return;
 
+    static float nextEyeRenderAt = 0.0F;
+    static std::uint8_t previousExpression = 0xFFU;
+    static bool previousHitFlash = false;
+    const std::uint8_t expression =
+        static_cast<std::uint8_t>((angryFace ? 1U : 0U)
+        | (sadFace ? 2U : 0U) | (happyFace ? 4U : 0U)
+        | (afraidFace ? 8U : 0U) | (surprisedFace ? 16U : 0U)
+        | (curiousFace ? 32U : 0U) | (disgustedFace ? 64U : 0U));
+    const bool expressionChanged = expression != previousExpression;
+    const bool hitFlashChanged = hitFlash != previousHitFlash;
+    if (phase < nextEyeRenderAt && !expressionChanged && !hitFlashChanged) return;
+    previousExpression = expression;
+    previousHitFlash = hitFlash;
+    nextEyeRenderAt = phase + (1.0F / 15.0F);
+
     const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
     const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
     lv_obj_set_pos(ui.eyeCanvas, canvasX, canvasY);
@@ -1237,7 +1246,7 @@ void updatePipEyeCanvas(
     pipEyeFace.blush = 0.0F;
 
     // Pip uses 118 x 138 neutral eye shapes, scaled by EYE_SCALE=1.45.
-    // The 360 px canvas is a 0.7725 scale of Pip's 466 px face coordinate space.
+    // The 320 px canvas is a 0.6867 scale of Pip's 466 px face coordinate space.
     constexpr float PipScreenScale =
         static_cast<float>(PipEyeCanvasWidth) / 466.0F;
     constexpr float PipEyeScale = 1.45F;
@@ -1418,9 +1427,9 @@ void updateCreatureVisuals() {
     // Apply the same scale on both axes: the creature compresses and rebounds,
     // but its proportions never stretch sideways.
     const int bodyWidth = static_cast<int>(
-        392.0F * (0.94F + static_cast<float>(genes.bodyWidth) * 0.0011F) * hitScale);
+        392.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyWidth) * 0.0011F) * hitScale);
     const int bodyHeight = static_cast<int>(
-        374.0F * (0.94F + static_cast<float>(genes.bodyHeight) * 0.0011F) * hitScale);
+        374.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyHeight) * 0.0011F) * hitScale);
     bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
@@ -1459,13 +1468,6 @@ void updateCreatureVisuals() {
 
 
     if (ui.eyeCanvas != nullptr && ui.eyeBuffer != nullptr) {
-        for (int i = 0; i < 2; ++i) {
-            lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.highlights[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_HIDDEN);
-        }
-
         float gazeX = std::sin(phase * 0.72F) * 5.5F
             + std::sin(phase * 0.21F) * 2.0F;
         float gazeY = std::cos(phase * 0.51F) * 3.0F;
@@ -1482,41 +1484,6 @@ void updateCreatureVisuals() {
             angryFace, sadFace, happyFace, afraidFace, surprisedFace,
             curiousFace, disgustedFace, hitFlash);
 
-        // Hard, mirrored anime brows sit above the sculpted eyes.
-        const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
-        const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
-        float browShapeWidth = 118.0F;
-        float browShapeHeight = 138.0F;
-        if (angryFace) { browShapeWidth = 114.0F; browShapeHeight = 114.0F; }
-        else if (disgustedFace) { browShapeWidth = 118.0F; browShapeHeight = 104.0F; }
-        else if (sadFace) { browShapeWidth = 112.0F; browShapeHeight = 126.0F; }
-        else if (happyFace) { browShapeWidth = 118.0F; browShapeHeight = 124.0F; }
-        else if (surprisedFace) { browShapeWidth = 124.0F; browShapeHeight = 160.0F; }
-        else if (afraidFace) { browShapeWidth = 126.0F; browShapeHeight = 160.0F; }
-        else if (curiousFace) { browShapeWidth = 124.0F; browShapeHeight = 148.0F; }
-        constexpr float eyeScale = 1.45F
-            * static_cast<float>(PipEyeCanvasWidth) / 466.0F;
-        const int browWidth = static_cast<int>(browShapeWidth * eyeScale * 0.90F + 0.5F);
-        const int browHeight = angryFace ? 12 : 8;
-        const int browY = canvasY + 100
-            - static_cast<int>(browShapeHeight * eyeScale * 0.5F + 0.5F)
-            - browHeight - 4;
-        for (int i = 0; i < 2; ++i) {
-            const int eyeCenterX = i == 0 ? 89 : 271;
-            lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_size(ui.brows[i], browWidth, browHeight);
-            lv_obj_set_style_transform_pivot_x(ui.brows[i], browWidth / 2, LV_PART_MAIN);
-            lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
-            lv_obj_set_pos(ui.brows[i],
-                canvasX + eyeCenterX - browWidth / 2,
-                browY);
-            const int browAngle = i == 0
-                ? (angryFace ? 215 : (happyFace ? 35 : 135))
-                : (angryFace ? -215 : (happyFace ? -35 : -135));
-            lv_obj_set_style_transform_rotation(ui.brows[i], browAngle, LV_PART_MAIN);
-            lv_obj_set_style_bg_color(ui.brows[i],
-                color(angryFace ? 0x12232D : 0x20343D), LV_PART_MAIN);
-        }
     } else {
     const float eyeScale = 0.90F + static_cast<float>(genes.eyeSize) * 0.0028F;
     const int eyeWidth = static_cast<int>(78.0F * eyeScale);
@@ -1600,20 +1567,6 @@ void updateCreatureVisuals() {
 
     }
 
-    int mouthWidth = 34;
-    int mouthHeight = 5;
-    int mouthY = static_cast<int>(bodyHeight * 0.67F);
-    if (happyFace) { mouthWidth = 40; mouthHeight = 8; mouthY -= 2; }
-    if (sadFace) { mouthWidth = 28; mouthHeight = 5; mouthY += 5; }
-    if (angryFace) { mouthWidth = 36; mouthHeight = 4; mouthY += 2; }
-    if (surprisedFace || afraidFace) { mouthWidth = 20; mouthHeight = 22; }
-    if (disgustedFace) { mouthWidth = 38; mouthHeight = 4; }
-    if (reaction == Reaction::Curious) { mouthWidth = 15; mouthHeight = 12; }
-
-    lv_obj_set_size(ui.mouth, mouthWidth, mouthHeight);
-    lv_obj_set_pos(ui.mouth, (bodyWidth - mouthWidth) / 2, mouthY);
-    lv_obj_set_style_radius(ui.mouth,
-        (surprisedFace || afraidFace) ? LV_RADIUS_CIRCLE : 2, LV_PART_MAIN);
     if (messageOverride != nullptr && animationTime < messageUntil) {
         setStatus(messageOverride);
     } else {
@@ -1643,22 +1596,37 @@ audio::Cue cueForReaction(Reaction reaction) {
 
 void initialize() {
     storageReady = persistence::initialize();
-    if (storageReady) restoredFromSave = persistence::load(pet);
+    restoredFromSave = false;
+    if (storageReady && persistence::loadGarden(gardenState)
+        && gardenState.count > 0U && gardenState.activeIndex < gardenState.count) {
+        CreatureSimulation selected(gardenState.creatures[gardenState.activeIndex].genome);
+        restoredFromSave = selected.restorePersistentState(
+            gardenState.creatures[gardenState.activeIndex]);
+        if (restoredFromSave) pet = selected;
+    }
+
     if (!restoredFromSave) {
+        gardenState = {};
         Genome birthGenome = makeDefaultGenome();
         birthGenome.seed = esp_random();
         if (birthGenome.seed == 0U) birthGenome.seed = 0xA341316CU;
         pet = CreatureSimulation(birthGenome);
+        gardenState.count = 1U;
+        gardenState.activeIndex = 0U;
+        gardenState.creatures[0] = pet.persistentState();
         requestSave();
     } else if (pet.genome().seed == makeDefaultGenome().seed) {
-        // Give pre-name-system saves a one-time stable identity without resetting their simulation.
+        // Give pre-name-system saves a one-time stable identity without resetting simulation data.
         auto savedState = pet.persistentState();
         savedState.genome.seed = esp_random();
         if (savedState.genome.seed == 0U) savedState.genome.seed = 0xA341316CU;
         (void)pet.restorePersistentState(savedState);
+        gardenState.creatures[gardenState.activeIndex] = pet.persistentState();
         requestSave();
     }
+
     createUi();
+    refreshGardenPanel();
     if (restoredFromSave) setMessage("WELCOME BACK", 2.0F);
 }
 
@@ -1669,14 +1637,17 @@ void setBatteryStatus(int percent, bool charging) {
 
 void toggleDebugPanel() {
     if (ui.volumePanel != nullptr
-        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) {
-        hideVolumePanel();
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) hideVolumePanel();
+    if (ui.gardenPanel != nullptr
+        && !lv_obj_has_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN)) {
+        hideGardenPanel();
+        return;
     }
-    if (ui.debugPanel == nullptr) return;
     if (ui.menuPanel != nullptr && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) {
         hideMenuPanel();
         return;
     }
+    if (ui.debugPanel == nullptr) return;
     if (lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)) {
         hideMenuPanel();
         showDebugPanel();
@@ -1687,11 +1658,11 @@ void toggleDebugPanel() {
 
 void toggleMenuPanel() {
     if (ui.volumePanel != nullptr
-        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) {
-        hideVolumePanel();
-    }
-    if (ui.menuPanel == nullptr) return;
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) hideVolumePanel();
+    if (ui.gardenPanel != nullptr
+        && !lv_obj_has_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN)) hideGardenPanel();
     if (ui.debugPanel != nullptr) hideDebugPanel();
+    if (ui.menuPanel == nullptr) return;
     if (lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) showMenuPanel();
     else hideMenuPanel();
 }
@@ -1732,7 +1703,17 @@ void update(float deltaSeconds) {
     }
     pet.update(dt);
     updatePersistence(dt);
-    updateBackground(dt);
+
+    const bool debugVisible = ui.debugPanel != nullptr
+        && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
+    const bool menuVisible = ui.menuPanel != nullptr
+        && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
+    const bool volumeVisible = ui.volumePanel != nullptr
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
+    const bool gardenVisible = ui.gardenPanel != nullptr
+        && !lv_obj_has_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN);
+    const bool overlayVisible = debugVisible || menuVisible || volumeVisible || gardenVisible;
+    if (!overlayVisible && !sensor.screenSleeping) updateBackground(dt);
 
     const Reaction currentReaction = pet.reaction().kind();
     if (currentReaction == Reaction::None) lastAudioReaction = Reaction::None;
@@ -1741,13 +1722,7 @@ void update(float deltaSeconds) {
         lastAudioReaction = currentReaction;
     }
 
-    const bool debugVisible = ui.debugPanel != nullptr
-        && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
-    const bool menuVisible = ui.menuPanel != nullptr
-        && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
-    const bool volumeVisible = ui.volumePanel != nullptr
-        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
-    if (!debugVisible && !menuVisible && !volumeVisible && !sensor.screenSleeping) {
+    if (!overlayVisible && !sensor.screenSleeping) {
         updateCreatureVisuals();
     }
     if (debugVisible && animationTime >= nextDebugRefresh) {
