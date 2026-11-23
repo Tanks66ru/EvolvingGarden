@@ -27,6 +27,7 @@ std::atomic<bool> soundPending{false};
 std::atomic<float> eventIntensity{0.0F};
 std::atomic<float> eventDuration{0.0F};
 std::atomic<std::uint8_t> inputLevel{0};
+std::atomic<std::uint8_t> outputVolumePercent{100};
 std::atomic<std::uint64_t> ignoreMicUntil{0};
 
 struct Tone {
@@ -218,7 +219,10 @@ void play(Cue cue) {
             const float attack = std::min(1.0F, static_cast<float>(i) / 110.0F);
             const float release = std::min(1.0F, static_cast<float>(toneSamples - i) / 220.0F);
             const float envelope = std::min(attack, release);
-            samples.push_back(static_cast<std::int16_t>(std::sin(phase) * 2600.0F * envelope));
+            samples.push_back(static_cast<std::int16_t>(
+                std::sin(phase) * 2600.0F
+                * (static_cast<float>(outputVolumePercent.load()) / 100.0F)
+                * envelope));
             phase += phaseStep;
         }
 
@@ -234,6 +238,15 @@ void play(Cue cue) {
             ignoreMicUntil.store(SDL_GetTicks64() + totalDurationMs + 160U);
         }
     }
+}
+
+void setVolumePercent(std::uint8_t percent) {
+    outputVolumePercent.store(std::min<std::uint8_t>(
+        percent, static_cast<std::uint8_t>(100)));
+}
+
+std::uint8_t volumePercent() {
+    return outputVolumePercent.load();
 }
 
 bool consumeSoundEvent(float& intensity, float& durationSeconds) {
