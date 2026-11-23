@@ -1142,8 +1142,22 @@ void updateCreatureVisuals() {
         // Hard, mirrored anime brows sit above the sculpted eyes.
         const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
         const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
-        constexpr int browWidth = 118;
+        float browShapeWidth = 118.0F;
+        float browShapeHeight = 138.0F;
+        if (angryFace) { browShapeWidth = 114.0F; browShapeHeight = 114.0F; }
+        else if (disgustedFace) { browShapeWidth = 118.0F; browShapeHeight = 104.0F; }
+        else if (sadFace) { browShapeWidth = 112.0F; browShapeHeight = 126.0F; }
+        else if (happyFace) { browShapeWidth = 118.0F; browShapeHeight = 124.0F; }
+        else if (surprisedFace) { browShapeWidth = 124.0F; browShapeHeight = 160.0F; }
+        else if (afraidFace) { browShapeWidth = 126.0F; browShapeHeight = 160.0F; }
+        else if (curiousFace) { browShapeWidth = 124.0F; browShapeHeight = 148.0F; }
+        constexpr float eyeScale = 1.45F
+            * static_cast<float>(PipEyeCanvasWidth) / 466.0F;
+        const int browWidth = static_cast<int>(browShapeWidth * eyeScale * 0.90F + 0.5F);
         const int browHeight = angryFace ? 12 : 8;
+        const int browY = canvasY + 100
+            - static_cast<int>(browShapeHeight * eyeScale * 0.5F + 0.5F)
+            - browHeight - 4;
         for (int i = 0; i < 2; ++i) {
             const int eyeCenterX = i == 0 ? 89 : 271;
             lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
@@ -1152,7 +1166,7 @@ void updateCreatureVisuals() {
             lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
             lv_obj_set_pos(ui.brows[i],
                 canvasX + eyeCenterX - browWidth / 2,
-                canvasY + 10);
+                browY);
             const int browAngle = i == 0
                 ? (angryFace ? 215 : (happyFace ? 35 : 135))
                 : (angryFace ? -215 : (happyFace ? -35 : -135));
