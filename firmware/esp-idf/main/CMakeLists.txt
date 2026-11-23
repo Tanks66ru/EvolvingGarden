@@ -16,6 +16,7 @@ idf_component_register(
         qmi8658
         nvs_flash
         esp_driver_gpio
+        esp_driver_i2c
 )
 
 spiffs_create_partition_image(
