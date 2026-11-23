@@ -5,6 +5,7 @@
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
 #include "platform/persistence.hpp"
+#include "third_party/pip_face/face.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,8 @@ namespace {
 
 struct PetUi {
     lv_obj_t* body = nullptr;
+    lv_obj_t* eyeCanvas = nullptr;
+    lv_draw_buf_t* eyeBuffer = nullptr;
     lv_obj_t* eyes[2]{};
     lv_obj_t* pupils[2]{};
     lv_obj_t* highlights[2]{};
@@ -55,6 +58,9 @@ struct CreatureTouchGesture {
 
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
+face_t pipEyeFace{};
+constexpr int PipEyeCanvasWidth = 300;
+constexpr int PipEyeCanvasHeight = 196;
 enum class LabPage : std::uint8_t { Device, Creature, Gens };
 LabPage activeLabPage = LabPage::Device;
 int deviceBatteryPercent = -1;
@@ -588,27 +594,56 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_clear_flag(ui.appendages[0], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[0], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[0], 0x3D817B, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_border_width(ui.appendages[0], 3, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.appendages[0], color(0x21414C), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[0], 9, LV_PART_MAIN);
 
     ui.appendages[1] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[1], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[1], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[1], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[1], 0x3D817B, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_border_width(ui.appendages[1], 3, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.appendages[1], color(0x21414C), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[1], 9, LV_PART_MAIN);
 
     ui.appendages[2] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[2], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[2], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[2], onCreaturePointer, LV_EVENT_ALL, nullptr);
     makeFlatObject(ui.appendages[2], 0x3D817B, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_border_width(ui.appendages[2], 3, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.appendages[2], color(0x21414C), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.appendages[2], 9, LV_PART_MAIN);
 
     ui.body = lv_obj_create(parent);
     makeFlatObject(ui.body, 0x4F998E, LV_RADIUS_CIRCLE);
-    lv_obj_set_style_border_width(ui.body, 5, LV_PART_MAIN);
-    lv_obj_set_style_border_color(ui.body, color(0x214E58), LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.body, 6, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.body, color(0x173B48), LV_PART_MAIN);
     // Keep the creature flat: software shadow blur is expensive on the ESP32-S3.
     lv_obj_add_flag(ui.body, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.body, onCreaturePointer, LV_EVENT_ALL, nullptr);
+
+    // Pip's renderer paints both eyes into a small RGB565 canvas. The canvas
+    // stays inside the creature silhouette, so its background matches the body.
+    ui.eyeBuffer = lv_draw_buf_create(
+        PipEyeCanvasWidth, PipEyeCanvasHeight, LV_COLOR_FORMAT_RGB565, 0);
+    if (ui.eyeBuffer != nullptr) {
+        ui.eyeCanvas = lv_canvas_create(ui.body);
+        if (ui.eyeCanvas != nullptr) {
+            lv_canvas_set_draw_buf(ui.eyeCanvas, ui.eyeBuffer);
+            lv_obj_set_size(ui.eyeCanvas, PipEyeCanvasWidth, PipEyeCanvasHeight);
+            lv_obj_set_pos(ui.eyeCanvas, 0, 40);
+            lv_obj_clear_flag(ui.eyeCanvas, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_add_flag(ui.eyeCanvas, LV_OBJ_FLAG_EVENT_BUBBLE);
+            pipEyeFace.color = 0xFFFF;
+            pipEyeFace.pupil_color = 0x18C3;
+            pipEyeFace.heart_color = 0xFA2F;
+            pipEyeFace.shading = 0.0F;
+            pipEyeFace.blush = 0.0F;
+        }
+    }
 
     for (int i = 0; i < 2; ++i) {
         ui.eyes[i] = lv_obj_create(ui.body);
@@ -690,7 +725,7 @@ void createUi() {
 
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
-    lv_obj_set_pos(ui.status, 23, 432);
+    lv_obj_set_pos(ui.status, 23, 440);
 
     ui.debugPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.debugPanel);
@@ -823,6 +858,98 @@ void createUi() {
     createMenuButton(ui.volumePanel, 188, "BACK TO GARDEN", 0xA8B9B5, onVolumeBackClicked);
 }
 
+
+void updatePipEyeCanvas(
+    int bodyWidth,
+    float phase,
+    float gazeX,
+    float gazeY,
+    bool angryFace,
+    bool sadFace,
+    bool happyFace,
+    bool afraidFace,
+    bool surprisedFace,
+    bool curiousFace,
+    bool disgustedFace,
+    bool hitFlash)
+{
+    if (ui.eyeCanvas == nullptr || ui.eyeBuffer == nullptr) return;
+
+    const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
+    constexpr int canvasY = 40;
+    lv_obj_set_pos(ui.eyeCanvas, canvasX, canvasY);
+
+    // Repaint the body-coloured canvas and reset Pip's old rectangles to avoid trails.
+    auto* pixels = static_cast<std::uint16_t*>(ui.eyeBuffer->data);
+    const std::uint16_t bodyPixel = lv_color_to_u16(
+        color(hitFlash ? 0xF1D39A : 0x4F998E));
+    std::fill_n(pixels, PipEyeCanvasWidth * PipEyeCanvasHeight, bodyPixel);
+    for (int i = 0; i < 4; ++i) {
+        pipEyeFace.drawn[i] = face_rect_t{0, 0, -1, -1};
+    }
+
+    pipEyeFace.color = 0xFFFF;
+    pipEyeFace.pupil_color = 0x18C3;
+    pipEyeFace.shading = 0.0F;
+    pipEyeFace.blush = 0.0F;
+
+    const float geneScale = 0.94F
+        + static_cast<float>(pet.genome().morphology.eyeSize) * 0.0012F;
+    float eyeHeightScale = 1.0F;
+    if (angryFace || disgustedFace) eyeHeightScale = 0.88F;
+    else if (happyFace) eyeHeightScale = 1.05F;
+    else if (sadFace) eyeHeightScale = 0.96F;
+    else if (surprisedFace || afraidFace) eyeHeightScale = 1.16F;
+
+    const float eyeWidth = 132.0F * geneScale;
+    const float eyeHeight = 130.0F * geneScale * eyeHeightScale;
+    float lid = 0.16F;
+    float lidTilt = 0.24F;
+    float taper = 0.20F;
+    if (angryFace) { lid = 0.33F; lidTilt = 0.58F; taper = 0.36F; }
+    else if (disgustedFace) { lid = 0.29F; lidTilt = 0.14F; taper = 0.22F; }
+    else if (sadFace) { lid = 0.28F; lidTilt = -0.25F; taper = 0.14F; }
+    else if (happyFace) { lid = 0.04F; lidTilt = 0.02F; taper = -0.06F; }
+    else if (surprisedFace || afraidFace) { lid = 0.02F; lidTilt = -0.12F; taper = -0.05F; }
+    else if (curiousFace) { lid = 0.10F; lidTilt = 0.18F; taper = 0.12F; }
+
+    for (int i = 0; i < 2; ++i) {
+        const float side = i == 0 ? -1.0F : 1.0F;
+        eye_t& eye = pipEyeFace.eye[i];
+        eye.x = i == 0 ? 75.0F : 225.0F;
+        eye.y = 98.0F + (sadFace ? 2.0F : 0.0F);
+        eye.w = eyeWidth;
+        eye.h = eyeHeight;
+        eye.depth = eyeWidth * 0.48F;
+        eye.yaw = std::clamp(gazeX * 0.006F, -0.14F, 0.14F);
+        eye.pitch = std::clamp(gazeY * 0.006F, -0.12F, 0.12F);
+        eye.roll = side * (angryFace ? 0.17F : 0.10F);
+        eye.taper = taper;
+        eye.lid = lid;
+        eye.tilt = -side * lidTilt;
+        eye.smile = happyFace ? 0.22F : 0.0F;
+        eye.look_x = std::clamp(gazeX * 0.014F, -0.30F, 0.30F);
+        eye.look_y = std::clamp(gazeY * 0.014F, -0.24F, 0.24F);
+        eye.pw = (angryFace || disgustedFace) ? 0.23F
+            : (afraidFace || surprisedFace) ? 0.20F
+            : happyFace ? 0.38F : 0.34F;
+        eye.ph = (angryFace || disgustedFace) ? 0.34F
+            : (afraidFace || surprisedFace) ? 0.24F
+            : happyFace ? 0.40F : 0.40F;
+        eye.square = 0.0F;
+        eye.heart = 0.0F;
+        eye.wobble = 0.022F * std::min(eye.w, eye.h) * 0.5F;
+        eye.wob_t = phase + static_cast<float>(i) * 7.3F;
+        eye.glint = 0.95F;
+        eye.spiral = 0.0F;
+        eye.veins = 0.0F;
+        eye.wet = sadFace ? 0.18F : (afraidFace ? 0.08F : 0.0F);
+    }
+
+    face_draw(&pipEyeFace, pixels, PipEyeCanvasWidth, PipEyeCanvasHeight);
+    lv_obj_invalidate(ui.eyeCanvas);
+}
+
 void updateCreatureVisuals() {
     const auto& genes = pet.genome().morphology;
     const float activity = static_cast<float>(pet.genome().personality.activity + 100) / 200.0F;
@@ -899,11 +1026,11 @@ void updateCreatureVisuals() {
 
     // Apply the same scale on both axes: the creature compresses and rebounds,
     // but its proportions never stretch sideways.
-    const int bodyWidth = static_cast<int>(392.0F
-        * (0.94F + genes.bodyWidth * 0.0011F) * hitScale);
-    const int bodyHeight = static_cast<int>(374.0F
-        * (0.94F + genes.bodyHeight * 0.0011F) * hitScale);
-    bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
+    const int bodyWidth = static_cast<int>(
+        (405.0F + static_cast<float>(genes.bodyWidth) * 0.15F) * hitScale);
+    const int bodyHeight = static_cast<int>(
+        (394.0F + static_cast<float>(genes.bodyHeight) * 0.12F) * hitScale);
+    bodyY = 220.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
@@ -919,24 +1046,70 @@ void updateCreatureVisuals() {
     const float appendageWave = std::sin(phase * (2.3F + activity * 2.8F));
     const float appendageBoost = exaggerated ? 1.8F : 1.0F;
     const int appendageLength = 32 + static_cast<int>(genes.appendageLength * 0.32F);
-    const int sideAppendageWidth = appendageLength + 32;
+    const int sideAppendageWidth = appendageLength + 26;
     constexpr float sideAppendageOffset = 14.0F;
-    lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 26);
-    lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 26);
-    lv_obj_set_size(ui.appendages[2], 26, appendageLength + 20);
+    lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 20);
+    lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 20);
+    lv_obj_set_size(ui.appendages[2], 22, appendageLength + 18);
+    lv_obj_set_style_transform_rotation(ui.appendages[0], -85, LV_PART_MAIN);
+    lv_obj_set_style_transform_rotation(ui.appendages[1], 85, LV_PART_MAIN);
     lv_obj_set_pos(ui.appendages[0], static_cast<int>(bodyX - sideAppendageOffset),
         static_cast<int>(bodyY + bodyHeight * 0.54F + appendageWave * 5.0F * appendageBoost));
     lv_obj_set_pos(ui.appendages[1],
         static_cast<int>(bodyX + bodyWidth - sideAppendageWidth + sideAppendageOffset),
         static_cast<int>(bodyY + bodyHeight * 0.49F - appendageWave * 6.0F * appendageBoost));
     lv_obj_set_pos(ui.appendages[2], static_cast<int>(bodyX + bodyWidth * 0.47F),
-        static_cast<int>(bodyY - appendageLength * 0.62F + std::sin(phase * 3.0F) * 4.0F));
+        static_cast<int>(bodyY - appendageLength * 0.36F + std::sin(phase * 3.0F) * 4.0F));
     for (int i = 0; i < 3; ++i) {
         const bool visible = genes.appendageCount > i;
         if (visible) lv_obj_clear_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
     }
 
+
+    if (ui.eyeCanvas != nullptr && ui.eyeBuffer != nullptr) {
+        for (int i = 0; i < 2; ++i) {
+            lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.highlights[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_HIDDEN);
+        }
+
+        float gazeX = std::sin(phase * 0.72F) * 5.5F
+            + std::sin(phase * 0.21F) * 2.0F;
+        float gazeY = std::cos(phase * 0.51F) * 3.0F;
+        if (curiousFace) gazeX += 6.0F;
+        if (afraidFace || surprisedFace) {
+            gazeX += std::sin(phase * 5.0F) * 4.0F;
+            gazeY -= 3.0F;
+        }
+        if (sadFace) gazeY += 3.5F;
+        gazeX = std::clamp(gazeX, -8.0F, 8.0F);
+        gazeY = std::clamp(gazeY, -6.0F, 6.0F);
+
+        updatePipEyeCanvas(bodyWidth, phase, gazeX, gazeY,
+            angryFace, sadFace, happyFace, afraidFace, surprisedFace,
+            curiousFace, disgustedFace, hitFlash);
+
+        // Hard, mirrored anime brows sit above the sculpted eyes.
+        const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
+        constexpr int browWidth = 142;
+        const int browHeight = angryFace ? 13 : 10;
+        for (int i = 0; i < 2; ++i) {
+            const int eyeCenterX = i == 0 ? 75 : 225;
+            lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_size(ui.brows[i], browWidth, browHeight);
+            lv_obj_set_style_transform_pivot_x(ui.brows[i], browWidth / 2, LV_PART_MAIN);
+            lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
+            lv_obj_set_pos(ui.brows[i], canvasX + eyeCenterX - browWidth / 2, 40 + 98 - 72);
+            const int browAngle = i == 0
+                ? (angryFace ? 215 : (happyFace ? 35 : 135))
+                : (angryFace ? -215 : (happyFace ? -35 : -135));
+            lv_obj_set_style_transform_rotation(ui.brows[i], browAngle, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(ui.brows[i],
+                color(angryFace ? 0x12232D : 0x20343D), LV_PART_MAIN);
+        }
+    } else {
     const float eyeScale = 0.90F + static_cast<float>(genes.eyeSize) * 0.0028F;
     const int eyeWidth = static_cast<int>(78.0F * eyeScale);
     const int baseEyeHeight = static_cast<int>(90.0F * eyeScale);
@@ -1016,18 +1189,23 @@ void updateCreatureVisuals() {
             color(angryFace ? 0x15232D : 0x20343D), LV_PART_MAIN);
     }
 
-    int mouthWidth = 44;
-    int mouthHeight = 9;
-    int mouthY = static_cast<int>(bodyHeight * 0.65F);
-    if (happyFace) { mouthWidth = 48; mouthHeight = 12; mouthY -= 2; }
-    if (sadFace) { mouthWidth = 33; mouthHeight = 7; mouthY += 5; }
-    if (angryFace) { mouthWidth = 42; mouthHeight = 5; mouthY += 2; }
-    if (surprisedFace || afraidFace) { mouthWidth = 23; mouthHeight = 25; }
-    if (disgustedFace) { mouthWidth = 45; mouthHeight = 6; }
-    if (reaction == Reaction::Curious) { mouthWidth = 17; mouthHeight = 15; }
+
+    }
+
+    int mouthWidth = 36;
+    int mouthHeight = 7;
+    int mouthY = static_cast<int>(bodyHeight * 0.68F);
+    if (happyFace) { mouthWidth = 40; mouthHeight = 9; mouthY -= 2; }
+    if (sadFace) { mouthWidth = 30; mouthHeight = 6; mouthY += 5; }
+    if (angryFace) { mouthWidth = 36; mouthHeight = 5; mouthY += 2; }
+    if (surprisedFace || afraidFace) { mouthWidth = 20; mouthHeight = 22; }
+    if (disgustedFace) { mouthWidth = 39; mouthHeight = 5; }
+    if (reaction == Reaction::Curious) { mouthWidth = 16; mouthHeight = 13; }
 
     lv_obj_set_size(ui.mouth, mouthWidth, mouthHeight);
     lv_obj_set_pos(ui.mouth, (bodyWidth - mouthWidth) / 2, mouthY);
+    lv_obj_set_style_radius(ui.mouth,
+        (surprisedFace || afraidFace) ? LV_RADIUS_CIRCLE : 3, LV_PART_MAIN);
     if (messageOverride != nullptr && animationTime < messageUntil) {
         setStatus(messageOverride);
     } else {
