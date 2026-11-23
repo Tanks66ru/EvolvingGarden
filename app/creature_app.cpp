@@ -230,9 +230,15 @@ void captureActiveCreatureSnapshot() {
 }
 
 bool saveGardenImmediately() {
-    if (!storageReady || gardenState.count == 0U) return false;
+    if (!storageReady || gardenState.count == 0U) {
+        saveRequested = true;
+        return false;
+    }
     captureActiveCreatureSnapshot();
-    if (!persistence::saveGarden(gardenState)) return false;
+    if (!persistence::saveGarden(gardenState)) {
+        saveRequested = true;
+        return false;
+    }
     saveRequested = false;
     saveInterval = 0.0F;
     secondsSinceSave = 0.0F;
