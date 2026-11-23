@@ -19,6 +19,7 @@ struct PetUi {
     lv_obj_t* body = nullptr;
     lv_obj_t* eyes[2]{};
     lv_obj_t* pupils[2]{};
+    lv_obj_t* highlights[2]{};
     lv_obj_t* mouth = nullptr;
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
@@ -428,6 +429,12 @@ void createCreature(lv_obj_t* parent) {
         lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.pupils[i], 0x182630, LV_RADIUS_CIRCLE);
 
+        ui.highlights[i] = lv_obj_create(ui.pupils[i]);
+        lv_obj_clear_flag(ui.highlights[i], LV_OBJ_FLAG_SCROLLABLE);
+        makeFlatObject(ui.highlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
+        lv_obj_set_size(ui.highlights[i], 7, 7);
+        lv_obj_set_pos(ui.highlights[i], 4, 4);
+
         ui.brows[i] = lv_obj_create(ui.body);
         lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_SCROLLABLE);
@@ -635,9 +642,12 @@ void updateCreatureVisuals() {
     bodyY += bodyOffsetY;
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
     lv_obj_set_pos(ui.body, static_cast<int>(bodyX), static_cast<int>(bodyY));
-    lv_obj_set_style_bg_color(ui.body,
-        hitElapsed >= 0.0F && hitElapsed < 0.075F ? color(0xF4E2B2) : color(0x64C5A7),
-        LV_PART_MAIN);
+    static bool previousHitFlash = false;
+    const bool hitFlash = hitElapsed >= 0.0F && hitElapsed < 0.075F;
+    if (hitFlash != previousHitFlash) {
+        lv_obj_set_style_bg_color(ui.body, color(hitFlash ? 0xF4E2B2 : 0x64C5A7), LV_PART_MAIN);
+        previousHitFlash = hitFlash;
+    }
 
     const float appendageWave = std::sin(phase * (2.3F + activity * 2.8F));
     const float appendageBoost = exaggerated ? 1.8F : 1.0F;
@@ -684,27 +694,35 @@ void updateCreatureVisuals() {
     else if (surprisedFace || afraidFace) eyeHeight = static_cast<int>(baseEyeHeight * 1.10F);
     if (blink) eyeHeight = 7;
 
+    static bool previousBlink = false;
+    if (blink != previousBlink) {
+        for (int i = 0; i < 2; ++i) {
+            lv_obj_set_style_bg_color(ui.eyes[i], color(blink ? 0x4DAD94 : 0xF5F7F4), LV_PART_MAIN);
+        }
+        previousBlink = blink;
+    }
+
     for (int i = 0; i < 2; ++i) {
         const int eyeX = i == 0 ? leftX : rightX;
-        lv_obj_set_size(ui.eyes[i], eyeWidth, eyeHeight);
+        const int individualEyeWidth = eyeWidth + (i == 0 ? 2 : -1);
+        lv_obj_set_size(ui.eyes[i], individualEyeWidth, eyeHeight);
         lv_obj_set_pos(ui.eyes[i], eyeX, eyeY + (blink ? 20 : 0));
-        lv_obj_set_style_bg_color(ui.eyes[i], color(blink ? 0x4DAD94 : 0xF5F7F4), LV_PART_MAIN);
 
         if (blink) {
             lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
-            const int pupilWidth = std::max(13, static_cast<int>(eyeWidth * (afraidFace ? 0.28F : 0.34F)));
-            const int pupilHeight = std::max(16, static_cast<int>(eyeHeight * 0.40F));
+            const int pupilWidth = std::max(16, static_cast<int>(individualEyeWidth * (afraidFace ? 0.29F : 0.34F)));
+            const int pupilHeight = std::max(20, static_cast<int>(eyeHeight * 0.43F));
             lv_obj_set_size(ui.pupils[i], pupilWidth, pupilHeight);
-            const int pupilX = (eyeWidth - pupilWidth) / 2 + static_cast<int>(gazeX);
+            const int pupilX = (individualEyeWidth - pupilWidth) / 2 + static_cast<int>(gazeX);
             const int pupilY = (eyeHeight - pupilHeight) / 2 + static_cast<int>(gazeY);
             lv_obj_set_pos(ui.pupils[i], pupilX, pupilY);
         }
 
         if (angryFace) {
             lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_size(ui.brows[i], eyeWidth + 3, 7);
+            lv_obj_set_size(ui.brows[i], individualEyeWidth + 3, 7);
             lv_obj_set_pos(ui.brows[i], eyeX - 1, eyeY - 8 + (i == 0 ? 4 : 0));
         } else {
             lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
