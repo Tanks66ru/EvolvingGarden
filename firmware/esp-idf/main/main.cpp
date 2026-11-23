@@ -162,19 +162,29 @@ constexpr int DisplayBitsPerPixel = 16;
 constexpr std::uint32_t DisplayQspiClockHz = 80'000'000;
 constexpr gpio_num_t DisplayTearingEffectPin = GPIO_NUM_13;
 
+static const std::uint8_t displayPage20[] = {0x20};
+static const std::uint8_t displaySelectPage00[] = {0x00};
+static const std::uint8_t displayMode[] = {0xA0};
+static const std::uint8_t displayDrive[] = {0x80};
+static const std::uint8_t displayRgb565[] = {0x55};
+static const std::uint8_t displayTeEnable[] = {0x00};
+static const std::uint8_t displayBrightness[] = {0xFF};
+static const std::uint8_t displayColumnRange[] = {0x00, 0x06, 0x01, 0xD7};
+static const std::uint8_t displayRowRange[] = {0x00, 0x00, 0x01, 0xD1};
+
 static const co5300_lcd_init_cmd_t displayInitCommands[] = {
-    {0xFE, (std::uint8_t[]){0x20}, 1, 0},
-    {0x19, (std::uint8_t[]){0x10}, 1, 0},
-    {0x1C, (std::uint8_t[]){0xA0}, 1, 0},
-    {0xFE, (std::uint8_t[]){0x00}, 1, 0},
-    {0xC4, (std::uint8_t[]){0x80}, 1, 0},
-    {0x3A, (std::uint8_t[]){0x55}, 1, 0},
-    {0x35, (std::uint8_t[]){0x00}, 1, 0},
-    {0x53, (std::uint8_t[]){0x20}, 1, 0},
-    {0x51, (std::uint8_t[]){0xFF}, 1, 0},
-    {0x63, (std::uint8_t[]){0xFF}, 1, 0},
-    {0x2A, (std::uint8_t[]){0x00, 0x06, 0x01, 0xD7}, 4, 0},
-    {0x2B, (std::uint8_t[]){0x00, 0x00, 0x01, 0xD1}, 4, 600},
+    {0xFE, displayPage20, sizeof(displayPage20), 0},
+    {0x19, displayRgb565, sizeof(displayRgb565), 0},
+    {0x1C, displayMode, sizeof(displayMode), 0},
+    {0xFE, displaySelectPage00, sizeof(displaySelectPage00), 0},
+    {0xC4, displayDrive, sizeof(displayDrive), 0},
+    {0x3A, displayRgb565, sizeof(displayRgb565), 0},
+    {0x35, displayTeEnable, sizeof(displayTeEnable), 0},
+    {0x53, displayMode, sizeof(displayMode), 0},
+    {0x51, displayBrightness, sizeof(displayBrightness), 0},
+    {0x63, displayBrightness, sizeof(displayBrightness), 0},
+    {0x2A, displayColumnRange, sizeof(displayColumnRange), 0},
+    {0x2B, displayRowRange, sizeof(displayRowRange), 600},
     {0x11, nullptr, 0, 600},
     {0x29, nullptr, 0, 0},
 };
@@ -219,7 +229,7 @@ lv_display_t* startDisplayWithTearingSync() {
         CO5300_PANEL_IO_QSPI_CONFIG(BSP_LCD_CS, nullptr, nullptr);
     ioConfig.pclk_hz = DisplayQspiClockHz;
     ioConfig.trans_queue_depth = CONFIG_BSP_LCD_TRANS_QUEUE_DEPTH;
-    const co5300_vendor_config_t vendorConfig = {
+    co5300_vendor_config_t vendorConfig = {
         .init_cmds = displayInitCommands,
         .init_cmds_size = static_cast<std::uint16_t>(
             sizeof(displayInitCommands) / sizeof(displayInitCommands[0])),
@@ -234,7 +244,7 @@ lv_display_t* startDisplayWithTearingSync() {
         .reset_gpio_num = BSP_LCD_RST,
         .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
         .bits_per_pixel = DisplayBitsPerPixel,
-        .vendor_config = const_cast<co5300_vendor_config_t*>(&vendorConfig),
+        .vendor_config = &vendorConfig,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_co5300(
         displayPanelIo, &panelConfig, &displayPanel));
