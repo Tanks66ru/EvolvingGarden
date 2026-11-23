@@ -216,6 +216,9 @@ void setMessage(const char* message, float duration = 1.2F) {
     setStatus(message);
 }
 
+void showGardenPanel();
+void hideGardenPanel();
+
 void requestSave() {
     saveRequested = true;
 }
