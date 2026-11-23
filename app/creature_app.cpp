@@ -880,7 +880,7 @@ void updatePipEyeCanvas(
     lv_obj_set_pos(ui.eyeCanvas, canvasX, canvasY);
 
     // Repaint the body-coloured canvas and reset Pip's old rectangles to avoid trails.
-    auto* pixels = static_cast<std::uint16_t*>(ui.eyeBuffer->data);
+    auto* pixels = reinterpret_cast<std::uint16_t*>(ui.eyeBuffer->data);
     const std::uint16_t bodyPixel = lv_color_to_u16(
         color(hitFlash ? 0xF1D39A : 0x427E83));
     std::fill_n(pixels, PipEyeCanvasWidth * PipEyeCanvasHeight, bodyPixel);
