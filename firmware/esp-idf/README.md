@@ -12,9 +12,10 @@ Target: Waveshare ESP32-S3-Touch-AMOLED-1.75C, 466 x 466 AMOLED.
 - **Tilt:** holding the board at a noticeable angle triggers a balance/curiosity response.
 - **Rotate:** a quick rotation around the screen normal triggers a separate surprise response.
 - **Face-down sleep:** after the board is stable with the screen facing down for about 1.5 seconds, AMOLED brightness is set to zero. Lifting or touching the board wakes the screen.
-- **BOOT side button:** opens or closes diagnostics. It is GPIO0, active-low; short-press BOOT while the application is running. Holding BOOT during reset still enters the ESP32 download mode. BACK remains available on the panel.
+- **PWR top button:** opens or closes the Garden menu. It is read from the AXP2101 PMIC over the I2C bus initialized by the BSP.
+- **BOOT bottom button:** opens or closes diagnostics; while the Garden menu is open it acts as Back. It is GPIO0, active-low. Holding BOOT during reset still enters ESP32 download mode.
 
-The built-in microphone sound-burst detection and reaction audio remain active.
+The built-in microphone sound-burst detection and reaction audio remain active. The serial monitor reports measured display refresh FPS every two seconds.
 
 ## IMU and screen sleep notes
 
@@ -72,6 +73,7 @@ Flash using the port shown in Device Manager (the board was previously detected 
 ## Notes
 
 - The same creature simulation, expressions, procedural geometry and LVGL widgets are shared by the firmware.
+- LVGL software rendering is configured to use two draw units on the ESP32-S3; the refresh FPS is logged to the serial monitor.
 - Audio uses the board's ES7210 microphone ADC and ES8311 speaker codec through the official BSP.
 - The onboard microphones detect sound bursts only; there is no speech recognition.
 - The board has no vibration motor, so hit feedback uses the display animation and speaker.
