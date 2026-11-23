@@ -371,7 +371,7 @@ void hideVolumePanel() {
 }
 
 void onVolumeSliderChanged(lv_event_t* event) {
-    lv_obj_t* slider = lv_event_get_target(event);
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(event));
     const int value = lv_slider_get_value(slider);
     audio::setVolumePercent(static_cast<std::uint8_t>(value));
     updateVolumeLabel(value);
@@ -730,7 +730,7 @@ void createUi() {
     lv_obj_set_pos(volumeHint, 24, 57);
 
     ui.volumeLabel = makeLabel(
-        ui.volumePanel, "100%", &lv_font_montserrat_24, 0xBDE5D5);
+        ui.volumePanel, "100%", &lv_font_montserrat_18, 0xBDE5D5);
     lv_obj_set_width(ui.volumeLabel, 316);
     lv_obj_set_pos(ui.volumeLabel, 24, 79);
 
