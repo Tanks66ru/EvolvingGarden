@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <esp_random.h>
 
 using namespace evolvinggarden;
@@ -399,9 +400,12 @@ std::uint32_t createUniqueCreatureSeed() {
         for (std::size_t i = 0; i < gardenState.count; ++i) {
             const std::uint32_t existingSeed = gardenState.creatures[i].genome.seed;
             const GeneratedCreatureName existingName = generateCreatureName(existingSeed);
-            const bool sameName = candidateName.title == existingName.title
-                && candidateName.adjective == existingName.adjective
-                && candidateName.noun == existingName.noun;
+            const bool sameTitle = (candidateName.title == nullptr && existingName.title == nullptr)
+                || (candidateName.title != nullptr && existingName.title != nullptr
+                    && std::strcmp(candidateName.title, existingName.title) == 0);
+            const bool sameName = sameTitle
+                && std::strcmp(candidateName.adjective, existingName.adjective) == 0
+                && std::strcmp(candidateName.noun, existingName.noun) == 0;
             if (existingSeed == seed || sameName) {
                 used = true;
                 break;
@@ -1617,6 +1621,12 @@ void initialize() {
         requestSave();
     } else {
         // Rewrite a migrated legacy save into the multi-creature Garden format.
+        requestSave();
+    }
+
+    if (!pet.isInForeground()) {
+        (void)pet.applyInteraction(Interaction::BroughtToForeground);
+        gardenState.creatures[gardenState.activeIndex] = pet.persistentState();
         requestSave();
     }
 
