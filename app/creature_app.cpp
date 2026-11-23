@@ -918,8 +918,9 @@ void createCreature(lv_obj_t* parent) {
         }
     }
 
-    for (int i = 0; i < 2; ++i) {
-        ui.eyes[i] = lv_obj_create(ui.body);
+    // Only create the LVGL fallback eyes if the RGB565 Pip canvas could not be allocated.
+    if (ui.eyeCanvas == nullptr) {
+        for (int i = 0; i < 2; ++i) {
         lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_clear_flag(ui.eyes[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.eyes[i], 0xF1F3EE, LV_RADIUS_CIRCLE);
@@ -951,19 +952,12 @@ void createCreature(lv_obj_t* parent) {
             lv_obj_add_flag(ui.highlights[i], LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_HIDDEN);
         }
+
+        }
     }
 
     lv_obj_set_size(ui.body, 392, 374);
     lv_obj_set_pos(ui.body, 37, 46);
-    lv_obj_set_size(ui.eyes[0], 84, 96);
-    lv_obj_set_size(ui.eyes[1], 83, 96);
-    lv_obj_set_pos(ui.eyes[0], 86, 94);
-    lv_obj_set_pos(ui.eyes[1], 227, 94);
-    lv_obj_set_size(ui.pupils[0], 42, 60);
-    lv_obj_set_size(ui.pupils[1], 42, 60);
-    lv_obj_set_pos(ui.pupils[0], 21, 18);
-    lv_obj_set_pos(ui.pupils[1], 20, 18);
-}
 
 void createUi() {
     ui.screen = lv_screen_active();
