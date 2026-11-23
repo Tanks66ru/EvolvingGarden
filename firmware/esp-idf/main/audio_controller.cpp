@@ -29,6 +29,7 @@ esp_codec_dev_handle_t spk = nullptr;
 QueueHandle_t outputQueue = nullptr;
 std::atomic<bool> micOnline{false};
 std::atomic<bool> speakerOnline{false};
+std::atomic<std::uint8_t> outputVolumePercent{100};
 std::atomic<bool> fsOnline{false};
 std::atomic<bool> playing{false};
 std::atomic<bool> soundPending{false};
@@ -125,7 +126,9 @@ bool playWav(const char* path) {
         for (std::size_t i = 0; i < sampleCount; ++i) {
             const std::int32_t amplified = static_cast<std::int32_t>(samples[i]) * 2;
             samples[i] = static_cast<std::int16_t>(
-                std::clamp(amplified, -32768, 32767));
+                std::clamp(amplified,
+                    static_cast<std::int32_t>(-32768),
+                    static_cast<std::int32_t>(32767)));
         }
 
         if (esp_codec_dev_write(spk, samples, static_cast<int>(count)) != ESP_CODEC_DEV_OK) {
@@ -309,11 +312,13 @@ void initialize() {
     spk = bsp_audio_codec_speaker_init();
     if (spk != nullptr && esp_codec_dev_open(spk, &format) == ESP_CODEC_DEV_OK) {
         speakerOnline.store(true);
-        const esp_err_t volumeResult = esp_codec_dev_set_out_vol(spk, 100);
+        const auto initialVolume = outputVolumePercent.load();
+        const esp_err_t volumeResult = esp_codec_dev_set_out_vol(spk, static_cast<int>(initialVolume));
         if (volumeResult != ESP_OK) {
-            ESP_LOGW(Tag, "Maximum speaker volume setup failed: %s", esp_err_to_name(volumeResult));
+            ESP_LOGW(Tag, "Speaker volume setup failed: %s", esp_err_to_name(volumeResult));
         } else {
-            ESP_LOGI(Tag, "Speaker ready at maximum codec volume (100%%)");
+            ESP_LOGI(Tag, "Speaker ready at %u%% codec volume",
+                static_cast<unsigned>(initialVolume));
         }
     } else {
         spk = nullptr;
@@ -344,6 +349,20 @@ void initialize() {
 
 void play(Cue cue) {
     if (outputQueue != nullptr && speakerOnline.load()) (void)xQueueSend(outputQueue, &cue, 0);
+}
+void setVolumePercent(std::uint8_t percent) {
+    const std::uint8_t safePercent = std::min<std::uint8_t>(
+        percent, static_cast<std::uint8_t>(100));
+    outputVolumePercent.store(safePercent);
+    if (spk != nullptr && speakerOnline.load()) {
+        const esp_err_t result = esp_codec_dev_set_out_vol(spk, static_cast<int>(safePercent));
+        if (result != ESP_OK) {
+            ESP_LOGW(Tag, "Speaker volume update failed: %s", esp_err_to_name(result));
+        }
+    }
+}
+std::uint8_t volumePercent() {
+    return outputVolumePercent.load();
 }
 bool consumeSoundEvent(float& intensity, float& durationSeconds) {
     if (!soundPending.exchange(false)) return false;
