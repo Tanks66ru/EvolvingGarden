@@ -21,6 +21,7 @@ bool displaySleeping = false;
 constexpr gpio_num_t AdminButtonPin = GPIO_NUM_0; // BOOT, active low
 bool adminButtonReady = false;
 i2c_master_dev_handle_t pmuHandle = nullptr;
+bool pmuDeviceReady = false;
 bool pmuButtonReady = false;
 float pmuPollSeconds = 0.0F;
 float batteryPollSeconds = 0.0F;
@@ -66,12 +67,12 @@ void pollAdminButton() {
 }
 
 bool readPmuRegister(std::uint8_t reg, std::uint8_t& value) {
-    if (!pmuButtonReady || pmuHandle == nullptr) return false;
+    if (!pmuDeviceReady || pmuHandle == nullptr) return false;
     return i2c_master_transmit_receive(pmuHandle, &reg, 1, &value, 1, 10) == ESP_OK;
 }
 
 bool writePmuRegister(std::uint8_t reg, std::uint8_t value) {
-    if (!pmuButtonReady || pmuHandle == nullptr) return false;
+    if (!pmuDeviceReady || pmuHandle == nullptr) return false;
     const std::uint8_t data[2] = {reg, value};
     return i2c_master_transmit(pmuHandle, data, sizeof(data), 10) == ESP_OK;
 }
@@ -93,7 +94,7 @@ void configurePowerButton() {
         ESP_LOGE(Tag, "PMIC device setup failed: %s", esp_err_to_name(result));
         return;
     }
-    pmuButtonReady = true;
+    pmuDeviceReady = true;
 
     std::uint8_t irqEnable = 0;
     if (!readPmuRegister(0x41, irqEnable)
@@ -103,6 +104,7 @@ void configurePowerButton() {
         pmuButtonReady = false;
         return;
     }
+    pmuButtonReady = true;
     ESP_LOGI(Tag, "PWR button ready (AXP2101)");
 }
 
@@ -120,7 +122,7 @@ void pollPowerButton(float dt) {
 }
 
 void pollBattery(float dt) {
-    if (!pmuButtonReady) return;
+    if (!pmuDeviceReady) return;
     batteryPollSeconds += dt;
     if (batteryPollSeconds < 2.0F) return;
     batteryPollSeconds = 0.0F;
