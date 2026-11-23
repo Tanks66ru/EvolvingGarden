@@ -1011,7 +1011,7 @@ void createUi() {
 
     ui.debugContentCard = lv_obj_create(ui.debugPanel);
     lv_obj_remove_style_all(ui.debugContentCard);
-    lv_obj_set_size(ui.debugContentCard, 430, 326);
+    lv_obj_set_size(ui.debugContentCard, 430, 282);
     lv_obj_set_pos(ui.debugContentCard, 0, 96);
     lv_obj_set_style_bg_color(ui.debugContentCard, color(0x1A2A35), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui.debugContentCard, LV_OPA_COVER, LV_PART_MAIN);
@@ -1027,12 +1027,26 @@ void createUi() {
     lv_obj_set_pos(ui.debugContentLabel, 0, 0);
     lv_obj_set_style_text_align(ui.debugContentLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
     lv_label_set_long_mode(ui.debugContentLabel, LV_LABEL_LONG_WRAP);
+
+    ui.debugAddCreatureButton = lv_button_create(ui.debugPanel);
+    lv_obj_set_size(ui.debugAddCreatureButton, 430, 44);
+    lv_obj_set_pos(ui.debugAddCreatureButton, 0, 390);
+    lv_obj_set_style_bg_color(ui.debugAddCreatureButton, color(0xC8A86D), LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.debugAddCreatureButton, 14, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.debugAddCreatureButton, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(ui.debugAddCreatureButton,
+        onDebugAddCreatureClicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* addCreatureLabel = makeLabel(
+        ui.debugAddCreatureButton, "DEBUG: ADD CREATURE TO GARDEN",
+        &lv_font_montserrat_14, 0x172831);
+    lv_obj_center(addCreatureLabel);
+
     selectLabPage(LabPage::Device);
 
     ui.menuPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.menuPanel);
-    lv_obj_set_size(ui.menuPanel, 364, 326);
-    lv_obj_set_pos(ui.menuPanel, 51, 70);
+    lv_obj_set_size(ui.menuPanel, 364, 390);
+    lv_obj_set_pos(ui.menuPanel, 51, 38);
     lv_obj_set_style_bg_color(ui.menuPanel, color(0x1A2A35), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui.menuPanel, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(ui.menuPanel, 30, LV_PART_MAIN);
@@ -1048,10 +1062,86 @@ void createUi() {
     lv_obj_set_width(menuTitle, 316);
     lv_obj_set_pos(menuTitle, 24, 15);
 
-    createMenuButton(ui.menuPanel, 64, "FEED", 0xE5C98F, onMenuFeedClicked);
-    createMenuButton(ui.menuPanel, 128, "CREATURE LAB", 0x78C9A9, onMenuLabClicked);
-    createMenuButton(ui.menuPanel, 192, "VOLUME", 0x8EBBD0, onMenuVolumeClicked);
-    createMenuButton(ui.menuPanel, 256, "CLOSE", 0xA8B9B5, onMenuCloseClicked);
+    createMenuButton(ui.menuPanel, 64, "MY GARDEN", 0x78C9A9, onMenuGardenClicked);
+    createMenuButton(ui.menuPanel, 122, "FEED", 0xE5C98F, onMenuFeedClicked);
+    createMenuButton(ui.menuPanel, 180, "CREATURE LAB", 0x8EBBD0, onMenuLabClicked);
+    createMenuButton(ui.menuPanel, 238, "VOLUME", 0xA8B9B5, onMenuVolumeClicked);
+    createMenuButton(ui.menuPanel, 296, "CLOSE", 0xA8B9B5, onMenuCloseClicked);
+
+    ui.gardenPanel = lv_obj_create(screen);
+    lv_obj_remove_style_all(ui.gardenPanel);
+    lv_obj_set_size(ui.gardenPanel, 430, 430);
+    lv_obj_set_pos(ui.gardenPanel, 18, 18);
+    lv_obj_set_style_bg_color(ui.gardenPanel, color(0x111B24), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.gardenPanel, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.gardenPanel, 26, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.gardenPanel, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.gardenPanel, color(0x4F8D79), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.gardenPanel, 0, LV_PART_MAIN);
+    lv_obj_add_flag(ui.gardenPanel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui.gardenPanel, onScreenTouch, LV_EVENT_PRESSED, nullptr);
+    lv_obj_clear_flag(ui.gardenPanel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t* gardenTitle = makeLabel(
+        ui.gardenPanel, "MY GARDEN", &lv_font_montserrat_18, 0xEAF2EF);
+    lv_obj_set_width(gardenTitle, 250);
+    lv_obj_set_pos(gardenTitle, 18, 14);
+
+    ui.gardenCountLabel = makeLabel(
+        ui.gardenPanel, "0 / 6", &lv_font_montserrat_14, 0x91AAA4);
+    lv_obj_set_size(ui.gardenCountLabel, 70, 32);
+    lv_obj_set_pos(ui.gardenCountLabel, 270, 14);
+
+    lv_obj_t* gardenBackButton = lv_button_create(ui.gardenPanel);
+    lv_obj_set_size(gardenBackButton, 72, 34);
+    lv_obj_set_pos(gardenBackButton, 340, 14);
+    lv_obj_set_style_bg_color(gardenBackButton, color(0x344451), LV_PART_MAIN);
+    lv_obj_set_style_radius(gardenBackButton, 11, LV_PART_MAIN);
+    lv_obj_add_event_cb(gardenBackButton, onGardenBackClicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* gardenBackLabel = makeLabel(
+        gardenBackButton, "BACK", &lv_font_montserrat_12, 0xEAF2EF);
+    lv_obj_center(gardenBackLabel);
+
+    lv_obj_t* gardenHint = makeLabel(
+        ui.gardenPanel, "SELECT A CREATURE  |  DEL TO REMOVE",
+        &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_set_width(gardenHint, 390);
+    lv_obj_set_pos(gardenHint, 20, 54);
+
+    for (std::size_t i = 0; i < persistence::MaximumGardenCreatures; ++i) {
+        gardenRowIndices[i] = static_cast<int>(i);
+        const int rowY = 86 + static_cast<int>(i) * 55;
+
+        ui.gardenRows[i] = lv_button_create(ui.gardenPanel);
+        lv_obj_set_size(ui.gardenRows[i], 300, 48);
+        lv_obj_set_pos(ui.gardenRows[i], 18, rowY);
+        lv_obj_set_style_bg_color(ui.gardenRows[i], color(0x263A45), LV_PART_MAIN);
+        lv_obj_set_style_radius(ui.gardenRows[i], 12, LV_PART_MAIN);
+        lv_obj_set_style_border_width(ui.gardenRows[i], 0, LV_PART_MAIN);
+        lv_obj_add_event_cb(ui.gardenRows[i],
+            onGardenRowClicked, LV_EVENT_CLICKED, &gardenRowIndices[i]);
+
+        ui.gardenRowLabels[i] = makeLabel(
+            ui.gardenRows[i], "EMPTY", &lv_font_montserrat_12, 0xEAF2EF);
+        lv_obj_set_width(ui.gardenRowLabels[i], 280);
+        lv_obj_set_style_text_align(ui.gardenRowLabels[i], LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+        lv_obj_center(ui.gardenRowLabels[i]);
+
+        ui.gardenDeleteButtons[i] = lv_button_create(ui.gardenPanel);
+        lv_obj_set_size(ui.gardenDeleteButtons[i], 76, 48);
+        lv_obj_set_pos(ui.gardenDeleteButtons[i], 332, rowY);
+        lv_obj_set_style_bg_color(ui.gardenDeleteButtons[i], color(0x633D43), LV_PART_MAIN);
+        lv_obj_set_style_radius(ui.gardenDeleteButtons[i], 12, LV_PART_MAIN);
+        lv_obj_set_style_border_width(ui.gardenDeleteButtons[i], 0, LV_PART_MAIN);
+        lv_obj_add_event_cb(ui.gardenDeleteButtons[i],
+            onGardenDeleteClicked, LV_EVENT_CLICKED, &gardenRowIndices[i]);
+        lv_obj_t* deleteLabel = makeLabel(
+            ui.gardenDeleteButtons[i], "DEL", &lv_font_montserrat_12, 0xF4E8E8);
+        lv_obj_center(deleteLabel);
+        lv_obj_add_flag(ui.gardenRows[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(ui.gardenDeleteButtons[i], LV_OBJ_FLAG_HIDDEN);
+    }
 
     ui.volumePanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.volumePanel);
