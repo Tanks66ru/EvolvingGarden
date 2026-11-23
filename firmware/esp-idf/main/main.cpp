@@ -164,23 +164,25 @@ constexpr gpio_num_t DisplayTearingEffectPin = GPIO_NUM_13;
 
 static const std::uint8_t displayPage20[] = {0x20};
 static const std::uint8_t displaySelectPage00[] = {0x00};
-static const std::uint8_t displayMode[] = {0xA0};
+static const std::uint8_t displayModeSelect[] = {0x10};
+static const std::uint8_t displayPanelMode[] = {0xA0};
 static const std::uint8_t displayDrive[] = {0x80};
 static const std::uint8_t displayRgb565[] = {0x55};
 static const std::uint8_t displayTeEnable[] = {0x00};
+static const std::uint8_t displayInterfaceMode[] = {0x20};
 static const std::uint8_t displayBrightness[] = {0xFF};
 static const std::uint8_t displayColumnRange[] = {0x00, 0x06, 0x01, 0xD7};
 static const std::uint8_t displayRowRange[] = {0x00, 0x00, 0x01, 0xD1};
 
 static const co5300_lcd_init_cmd_t displayInitCommands[] = {
     {0xFE, displayPage20, sizeof(displayPage20), 0},
-    {0x19, displayRgb565, sizeof(displayRgb565), 0},
-    {0x1C, displayMode, sizeof(displayMode), 0},
+    {0x19, displayModeSelect, sizeof(displayModeSelect), 0},
+    {0x1C, displayPanelMode, sizeof(displayPanelMode), 0},
     {0xFE, displaySelectPage00, sizeof(displaySelectPage00), 0},
     {0xC4, displayDrive, sizeof(displayDrive), 0},
     {0x3A, displayRgb565, sizeof(displayRgb565), 0},
     {0x35, displayTeEnable, sizeof(displayTeEnable), 0},
-    {0x53, displayMode, sizeof(displayMode), 0},
+    {0x53, displayInterfaceMode, sizeof(displayInterfaceMode), 0},
     {0x51, displayBrightness, sizeof(displayBrightness), 0},
     {0x63, displayBrightness, sizeof(displayBrightness), 0},
     {0x2A, displayColumnRange, sizeof(displayColumnRange), 0},
