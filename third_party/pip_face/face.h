@@ -8,6 +8,10 @@
 #pragma once
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     float x, y;              /* center on screen, px */
     float w, h, depth;       /* ellipsoid size, px */
@@ -51,3 +55,7 @@ extern void (*face_start)(face_t *f, uint16_t *buf, int w, int h);
 extern volatile int face_busy;
 
 extern void (*face_parallel)(void (*job)(void *ctx, int y0, int y1), void *ctx, int y0, int y1);
+
+#ifdef __cplusplus
+}
+#endif
