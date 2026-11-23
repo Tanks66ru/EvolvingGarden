@@ -979,7 +979,9 @@ void updateCreatureVisuals() {
         lv_obj_set_pos(ui.eyes[i], eyeX, eyeY + (blink ? 20 : 0));
         // Pip-inspired spherical eye treatment: slight inward tilt, deep pupil and paired catchlights.
         const int eyeTilt = i == 0 ? 75 : -75;
-        lv_obj_set_style_transform_angle(ui.eyes[i], eyeTilt, LV_PART_MAIN);
+        lv_obj_set_style_transform_rotation(ui.eyes[i], eyeTilt, LV_PART_MAIN);
+        lv_obj_set_style_transform_pivot_x(ui.eyes[i], individualEyeWidth / 2, LV_PART_MAIN);
+        lv_obj_set_style_transform_pivot_y(ui.eyes[i], eyeHeight / 2, LV_PART_MAIN);
 
         if (blink) {
             lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
@@ -1003,11 +1005,13 @@ void updateCreatureVisuals() {
         lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
         const int browHeight = angryFace ? 13 : 10;
         lv_obj_set_size(ui.brows[i], individualEyeWidth + 12, browHeight);
+        lv_obj_set_style_transform_pivot_x(ui.brows[i], (individualEyeWidth + 12) / 2, LV_PART_MAIN);
+        lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
         lv_obj_set_pos(ui.brows[i], eyeX - 6, eyeY - (angryFace ? 9 : 14));
         const int browAngle = i == 0
             ? (angryFace ? 175 : (happyFace ? 35 : 80))
             : (angryFace ? -175 : (happyFace ? -35 : -80));
-        lv_obj_set_style_transform_angle(ui.brows[i], browAngle, LV_PART_MAIN);
+        lv_obj_set_style_transform_rotation(ui.brows[i], browAngle, LV_PART_MAIN);
         lv_obj_set_style_bg_color(ui.brows[i],
             color(angryFace ? 0x15232D : 0x20343D), LV_PART_MAIN);
     }
