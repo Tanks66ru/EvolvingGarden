@@ -17,11 +17,9 @@ Target: Waveshare ESP32-S3-Touch-AMOLED-1.75C, 466 x 466 AMOLED.
 
 The built-in microphone sound-burst detection and reaction audio remain active. The serial monitor reports measured display refresh FPS every two seconds.
 
-## AMOLED tearing and refresh
+## AMOLED display startup
 
-The firmware initializes the CO5300 QSPI panel directly instead of using the BSP's default display startup. It enables the panel's TE signal and synchronizes full-frame transfers with GPIO13 through `esp_lvgl_adapter`. QSPI runs at 80 MHz in four data lines. This avoids sending a new frame partway through the panel's scan and should remove the horizontal old/new-frame split seen with unsynchronized refresh.
-
-At startup, the serial monitor should report that CO5300 TE synchronization is enabled on GPIO13. The adapter also reports TE wait timeouts and window adjustments. A repeated `TE wait timed out` warning means the panel's TE pulse is not being received or its edge/timing needs adjustment. Do not treat a low FPS number as proof of tearing: FPS and scan synchronization are separate measurements.
+The CO5300 display and CST9217 touch controller are initialized through the Waveshare 1.75C BSP. The adapter currently uses the BSP's standard refresh mode; GPIO13 TE synchronization is intentionally disabled until it can be enabled with the exact configuration supported by the installed adapter version. This preserves the known-good panel initialization path.
 
 ## IMU and screen sleep notes
 
