@@ -20,6 +20,8 @@ enum class Cue : std::uint8_t {
 // Implemented by the active platform. The UI and simulation depend only on this contract.
 void initialize();
 void play(Cue cue);
+void setVolumePercent(std::uint8_t percent);
+std::uint8_t volumePercent();
 bool consumeSoundEvent(float& intensity, float& durationSeconds);
 std::uint8_t microphoneLevelPercent();
 bool microphoneReady();
