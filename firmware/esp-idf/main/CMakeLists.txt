@@ -4,6 +4,7 @@ idf_component_register(
     SRCS
         "main.cpp"
         "audio_controller.cpp"
+        "${EVOLVING_GARDEN_ROOT}/third_party/pip_face/face.c"
         "${EVOLVING_GARDEN_ROOT}/app/creature_app.cpp"
         "${EVOLVING_GARDEN_ROOT}/platform/esp32/motion.cpp"
         "${EVOLVING_GARDEN_ROOT}/platform/esp32/persistence.cpp"
