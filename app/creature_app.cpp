@@ -248,8 +248,45 @@ void hideDebugPanel() {
     if (ui.debugPanel != nullptr) lv_obj_add_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
 }
 
+void showMenuPanel() {
+    motion::requestWake();
+    if (ui.menuPanel == nullptr) return;
+    lv_obj_clear_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_to_index(ui.menuPanel, -1);
+}
+
+void hideMenuPanel() {
+    motion::requestWake();
+    if (ui.menuPanel != nullptr) lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
+}
+
 void onActionClicked(lv_event_t*) { performFeed(); }
 void onDebugCloseClicked(lv_event_t*) { hideDebugPanel(); }
+void onMenuFeedClicked(lv_event_t*) {
+    hideMenuPanel();
+    performFeed();
+}
+void onMenuLabClicked(lv_event_t*) {
+    hideMenuPanel();
+    showDebugPanel();
+}
+void onMenuCloseClicked(lv_event_t*) { hideMenuPanel(); }
+
+lv_obj_t* createMenuButton(lv_obj_t* parent, int y, const char* text,
+                           std::uint32_t background, lv_event_cb_t callback) {
+    lv_obj_t* button = lv_button_create(parent);
+    lv_obj_set_size(button, 316, 54);
+    lv_obj_set_pos(button, 24, y);
+    lv_obj_set_style_bg_color(button, color(background), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(button, 18, LV_PART_MAIN);
+    lv_obj_set_style_border_width(button, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(button, callback, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* label = makeLabel(button, text, &lv_font_montserrat_16, 0x14252C);
+    lv_obj_center(label);
+    return button;
+}
 
 void onScreenTouch(lv_event_t*) {
     motion::requestWake();
@@ -441,14 +478,6 @@ void createUi() {
         static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
     lv_obj_add_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
 
-    ui.stepsLabel = makeLabel(screen, "STEPS 000000", &lv_font_montserrat_14, 0xBDE5D5);
-    lv_obj_set_width(ui.stepsLabel, 300);
-    lv_obj_set_pos(ui.stepsLabel, 24, 18);
-
-    ui.hintLabel = makeLabel(screen, "CIRCLE: PET   TAP: HIT   BOOT: LAB", &lv_font_montserrat_12, 0x91AAA4);
-    lv_obj_set_width(ui.hintLabel, 420);
-    lv_obj_set_pos(ui.hintLabel, 23, 48);
-
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
     lv_obj_set_pos(ui.status, 23, 354);
@@ -498,10 +527,31 @@ void createUi() {
     lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
     lv_label_set_long_mode(ui.debugLabel, LV_LABEL_LONG_WRAP);
 
-    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "BOOT BUTTON: OPEN / CLOSE LAB", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "BOOT: BACK TO CREATURE", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_width(debugHint, 430);
     lv_obj_set_pos(debugHint, 0, 420);
     refreshDebugPanel();
+
+    ui.menuPanel = lv_obj_create(screen);
+    lv_obj_remove_style_all(ui.menuPanel);
+    lv_obj_set_size(ui.menuPanel, 364, 292);
+    lv_obj_set_pos(ui.menuPanel, 51, 87);
+    lv_obj_set_style_bg_color(ui.menuPanel, color(0x1A2A35), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.menuPanel, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.menuPanel, 30, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.menuPanel, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.menuPanel, color(0x4F8D79), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.menuPanel, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(ui.menuPanel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t* menuTitle = makeLabel(ui.menuPanel, "GARDEN", &lv_font_montserrat_18, 0xEAF2EF);
+    lv_obj_set_width(menuTitle, 316);
+    lv_obj_set_pos(menuTitle, 24, 15);
+
+    createMenuButton(ui.menuPanel, 64, "FEED", 0xE5C98F, onMenuFeedClicked);
+    createMenuButton(ui.menuPanel, 128, "CREATURE LAB", 0x78C9A9, onMenuLabClicked);
+    createMenuButton(ui.menuPanel, 192, "CLOSE", 0xA8B9B5, onMenuCloseClicked);
 }
 
 void updateCreatureVisuals() {
@@ -715,8 +765,23 @@ void initialize() {
 
 void toggleDebugPanel() {
     if (ui.debugPanel == nullptr) return;
-    if (lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)) showDebugPanel();
-    else hideDebugPanel();
+    if (ui.menuPanel != nullptr && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) {
+        hideMenuPanel();
+        return;
+    }
+    if (lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN)) {
+        hideMenuPanel();
+        showDebugPanel();
+    } else {
+        hideDebugPanel();
+    }
+}
+
+void toggleMenuPanel() {
+    if (ui.menuPanel == nullptr) return;
+    if (ui.debugPanel != nullptr) hideDebugPanel();
+    if (lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) showMenuPanel();
+    else hideMenuPanel();
 }
 
 void update(float deltaSeconds) {
@@ -746,14 +811,6 @@ void update(float deltaSeconds) {
     if (sensor.rotationEvents > lastRotationEvents) {
         if (pet.applyInteraction(Interaction::Rotate)) requestSave();
         lastRotationEvents = sensor.rotationEvents;
-    }
-
-    if (ui.stepsLabel != nullptr && lastDisplayedSteps != pet.stepsTaken()) {
-        char stepsText[40]{};
-        std::snprintf(stepsText, sizeof(stepsText), "STEPS %06lu",
-            static_cast<unsigned long>(pet.stepsTaken()));
-        lv_label_set_text(ui.stepsLabel, stepsText);
-        lastDisplayedSteps = pet.stepsTaken();
     }
 
     float soundIntensity = 0.0F;
