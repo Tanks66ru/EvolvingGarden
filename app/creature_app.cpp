@@ -26,8 +26,6 @@ struct PetUi {
     lv_obj_t* pupils[2]{};
     lv_obj_t* highlights[2]{};
     lv_obj_t* secondaryHighlights[2]{};
-    lv_obj_t* mouth = nullptr;
-    lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
     lv_obj_t* screen = nullptr;
     lv_obj_t* status = nullptr;
@@ -41,6 +39,12 @@ struct PetUi {
     lv_obj_t* volumePanel = nullptr;
     lv_obj_t* volumeSlider = nullptr;
     lv_obj_t* volumeLabel = nullptr;
+    lv_obj_t* gardenPanel = nullptr;
+    lv_obj_t* gardenCountLabel = nullptr;
+    lv_obj_t* gardenRows[persistence::MaximumGardenCreatures]{};
+    lv_obj_t* gardenRowLabels[persistence::MaximumGardenCreatures]{};
+    lv_obj_t* gardenDeleteButtons[persistence::MaximumGardenCreatures]{};
+    lv_obj_t* debugAddCreatureButton = nullptr;
 };
 
 struct CreatureTouchGesture {
@@ -59,8 +63,10 @@ struct CreatureTouchGesture {
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
 face_t pipEyeFace{};
-constexpr int PipEyeCanvasWidth = 360;
-constexpr int PipEyeCanvasHeight = 200;
+persistence::GardenState gardenState{};
+int gardenRowIndices[persistence::MaximumGardenCreatures]{};
+constexpr int PipEyeCanvasWidth = 320;
+constexpr int PipEyeCanvasHeight = 190;
 enum class LabPage : std::uint8_t { Device, Creature, Gens };
 LabPage activeLabPage = LabPage::Device;
 int deviceBatteryPercent = -1;
@@ -214,6 +220,21 @@ void requestSave() {
     saveRequested = true;
 }
 
+void captureActiveCreatureSnapshot() {
+    if (gardenState.count == 0U || gardenState.activeIndex >= gardenState.count) return;
+    gardenState.creatures[gardenState.activeIndex] = pet.persistentState();
+}
+
+bool saveGardenImmediately() {
+    if (!storageReady || gardenState.count == 0U) return false;
+    captureActiveCreatureSnapshot();
+    if (!persistence::saveGarden(gardenState)) return false;
+    saveRequested = false;
+    saveInterval = 0.0F;
+    secondsSinceSave = 0.0F;
+    return true;
+}
+
 void updatePersistence(float dt) {
     if (!storageReady) return;
     saveInterval += dt;
@@ -221,12 +242,9 @@ void updatePersistence(float dt) {
 
     // Keep flash writes sparse, but flush interaction and step changes promptly.
     if ((saveRequested && secondsSinceSave >= 3.0F) || saveInterval >= 60.0F) {
-        if (persistence::save(pet)) {
+        if (saveGardenImmediately()) {
             saveRequested = false;
-            saveInterval = 0.0F;
-            secondsSinceSave = 0.0F;
         } else {
-            // Keep the request pending and retry after the normal throttle interval.
             saveInterval = 0.0F;
             secondsSinceSave = 0.0F;
         }
@@ -364,6 +382,218 @@ void refreshDebugPanel() {
     }
     lv_label_set_text(ui.debugContentLabel, text);
 }
+
+
+std::uint32_t createUniqueCreatureSeed() {
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        std::uint32_t seed = esp_random();
+        if (seed == 0U) seed = 0xA341316CU + static_cast<std::uint32_t>(attempt);
+        bool used = false;
+        for (std::size_t i = 0; i < gardenState.count; ++i) {
+            if (gardenState.creatures[i].genome.seed == seed) {
+                used = true;
+                break;
+            }
+        }
+        if (!used) return seed;
+    }
+    return mixNameSeed(esp_random() ^ static_cast<std::uint32_t>(animationTime * 1000.0F));
+}
+
+int seededRange(std::uint32_t seed, std::uint32_t salt, int minimum, int maximum) {
+    if (maximum <= minimum) return minimum;
+    return minimum + static_cast<int>(
+        mixNameSeed(seed ^ salt) % static_cast<std::uint32_t>(maximum - minimum + 1));
+}
+
+Genome createGardenGenome(std::uint32_t seed) {
+    Genome genome = makeDefaultGenome();
+    genome.seed = seed;
+    auto& p = genome.personality;
+    p.friendliness = static_cast<std::int16_t>(seededRange(seed, 0x1A01U, -30, 80));
+    p.optimism = static_cast<std::int16_t>(seededRange(seed, 0x1A02U, -35, 75));
+    p.sociability = static_cast<std::int16_t>(seededRange(seed, 0x1A03U, -45, 75));
+    p.curiosity = static_cast<std::int16_t>(seededRange(seed, 0x1A04U, -25, 90));
+    p.activity = static_cast<std::int16_t>(seededRange(seed, 0x1A05U, -40, 85));
+    p.sensitivity = static_cast<std::int16_t>(seededRange(seed, 0x1A06U, -70, 75));
+
+    // Stay inside the inherited point budget while allowing different personalities.
+    int excess = p.netPointCost() - static_cast<int>(genome.traitPointBudget);
+    std::int16_t* traits[] = {
+        &p.sensitivity, &p.sociability, &p.activity,
+        &p.optimism, &p.friendliness, &p.curiosity
+    };
+    for (std::int16_t* trait : traits) {
+        if (excess <= 0) break;
+        const int removable = static_cast<int>(*trait) + 100;
+        const int reduction = std::min(excess, std::max(0, removable));
+        *trait = static_cast<std::int16_t>(static_cast<int>(*trait) - reduction);
+        excess -= reduction;
+    }
+
+    auto& m = genome.morphology;
+    m.bodyWidth = static_cast<std::uint8_t>(seededRange(seed, 0x2B01U, 25, 90));
+    m.bodyHeight = static_cast<std::uint8_t>(seededRange(seed, 0x2B02U, 25, 90));
+    m.roundness = static_cast<std::uint8_t>(seededRange(seed, 0x2B03U, 15, 95));
+    m.asymmetry = static_cast<std::uint8_t>(seededRange(seed, 0x2B04U, 5, 95));
+    m.surfaceComplexity = static_cast<std::uint8_t>(seededRange(seed, 0x2B05U, 15, 95));
+    m.appendageCount = static_cast<std::uint8_t>(seededRange(seed, 0x2B06U, 1, 5));
+    m.appendageLength = static_cast<std::uint8_t>(seededRange(seed, 0x2B07U, 20, 95));
+    m.appendageCurvature = static_cast<std::uint8_t>(seededRange(seed, 0x2B08U, 5, 95));
+    m.eyeSize = static_cast<std::uint8_t>(seededRange(seed, 0x2B09U, 35, 95));
+    m.eyeSpacing = static_cast<std::uint8_t>(seededRange(seed, 0x2B0AU, 20, 85));
+    m.pigmentation = static_cast<std::uint8_t>(seededRange(seed, 0x2B0BU, 20, 95));
+    m.patternDensity = static_cast<std::uint8_t>(seededRange(seed, 0x2B0CU, 5, 90));
+    m.palette = static_cast<std::uint8_t>(seededRange(seed, 0x2B0DU, 0, 4));
+    genome.normalize();
+    return genome;
+}
+
+void formatCreatureName(std::uint32_t seed, char* destination, std::size_t capacity) {
+    if (destination == nullptr || capacity == 0U) return;
+    const GeneratedCreatureName name = generateCreatureName(seed);
+    if (name.title != nullptr) {
+        std::snprintf(destination, capacity, "%s %s %s",
+            name.title, name.adjective, name.noun);
+    } else {
+        std::snprintf(destination, capacity, "%s %s", name.adjective, name.noun);
+    }
+}
+
+void refreshGardenPanel() {
+    if (ui.gardenPanel == nullptr) return;
+
+    char countText[24]{};
+    std::snprintf(countText, sizeof(countText), "%u / %u",
+        static_cast<unsigned>(gardenState.count),
+        static_cast<unsigned>(persistence::MaximumGardenCreatures));
+    if (ui.gardenCountLabel != nullptr) lv_label_set_text(ui.gardenCountLabel, countText);
+
+    for (std::size_t i = 0; i < persistence::MaximumGardenCreatures; ++i) {
+        const bool occupied = i < gardenState.count;
+        if (ui.gardenRows[i] == nullptr || ui.gardenDeleteButtons[i] == nullptr) continue;
+        if (!occupied) {
+            lv_obj_add_flag(ui.gardenRows[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(ui.gardenDeleteButtons[i], LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+
+        char name[88]{};
+        char rowText[112]{};
+        formatCreatureName(gardenState.creatures[i].genome.seed, name, sizeof(name));
+        if (i == gardenState.activeIndex) {
+            std::snprintf(rowText, sizeof(rowText), "ACTIVE  |  %s", name);
+        } else {
+            std::snprintf(rowText, sizeof(rowText), "%s", name);
+        }
+        lv_label_set_text(ui.gardenRowLabels[i], rowText);
+        lv_obj_set_style_bg_color(ui.gardenRows[i],
+            color(i == gardenState.activeIndex ? 0x365B55 : 0x263A45), LV_PART_MAIN);
+        lv_obj_clear_flag(ui.gardenRows[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(ui.gardenDeleteButtons[i], LV_OBJ_FLAG_HIDDEN);
+        if (gardenState.count <= 1U) {
+            lv_obj_add_state(ui.gardenDeleteButtons[i], LV_STATE_DISABLED);
+        } else {
+            lv_obj_clear_state(ui.gardenDeleteButtons[i], LV_STATE_DISABLED);
+        }
+    }
+}
+
+bool restoreGardenCreature(std::size_t index) {
+    if (index >= gardenState.count) return false;
+    CreatureSimulation selected(gardenState.creatures[index].genome);
+    if (!selected.restorePersistentState(gardenState.creatures[index])) return false;
+
+    pet = selected;
+    gardenState.activeIndex = static_cast<std::uint8_t>(index);
+    (void)pet.applyInteraction(Interaction::BroughtToForeground);
+    gardenState.creatures[index] = pet.persistentState();
+    lastAudioReaction = Reaction::None;
+    lastHitAnimation = -10.0F;
+    backgroundRefreshSeconds = 0.0F;
+    return true;
+}
+
+void activateGardenCreature(std::size_t index) {
+    if (index >= gardenState.count) return;
+    if (index != gardenState.activeIndex) {
+        (void)pet.applyInteraction(Interaction::ReturnedToFarm);
+        captureActiveCreatureSnapshot();
+        if (!restoreGardenCreature(index)) {
+            setMessage("CREATURE SAVE COULD NOT BE LOADED");
+            return;
+        }
+        (void)saveGardenImmediately();
+    }
+    hideGardenPanel();
+    setMessage("CREATURE SELECTED", 1.0F);
+}
+
+void addCreatureToGarden() {
+    if (gardenState.count >= persistence::MaximumGardenCreatures) {
+        setMessage("GARDEN IS FULL");
+        return;
+    }
+
+    const std::uint32_t seed = createUniqueCreatureSeed();
+    CreatureSimulation newcomer(createGardenGenome(seed));
+    gardenState.creatures[gardenState.count] = newcomer.persistentState();
+    ++gardenState.count;
+    (void)saveGardenImmediately();
+    refreshGardenPanel();
+    refreshDebugPanel();
+    setMessage("NEW CREATURE ADDED", 1.6F);
+}
+
+void deleteGardenCreature(std::size_t index) {
+    if (index >= gardenState.count) return;
+    if (gardenState.count <= 1U) {
+        setMessage("KEEP AT LEAST ONE CREATURE");
+        return;
+    }
+
+    captureActiveCreatureSnapshot();
+    const bool deletingActive = index == gardenState.activeIndex;
+    for (std::size_t i = index; i + 1U < gardenState.count; ++i) {
+        gardenState.creatures[i] = gardenState.creatures[i + 1U];
+    }
+    --gardenState.count;
+    gardenState.creatures[gardenState.count] = {};
+
+    if (deletingActive) {
+        const std::size_t replacement = std::min(index,
+            static_cast<std::size_t>(gardenState.count - 1U));
+        if (!restoreGardenCreature(replacement)) {
+            setMessage("COULD NOT LOAD REPLACEMENT");
+            return;
+        }
+    } else if (index < gardenState.activeIndex) {
+        --gardenState.activeIndex;
+    }
+
+    (void)saveGardenImmediately();
+    refreshGardenPanel();
+    refreshDebugPanel();
+    setMessage("CREATURE REMOVED", 1.2F);
+}
+
+void onGardenRowClicked(lv_event_t* event) {
+    const auto* index = static_cast<const int*>(lv_event_get_user_data(event));
+    if (index == nullptr || *index < 0) return;
+    activateGardenCreature(static_cast<std::size_t>(*index));
+}
+
+void onGardenDeleteClicked(lv_event_t* event) {
+    const auto* index = static_cast<const int*>(lv_event_get_user_data(event));
+    if (index == nullptr || *index < 0) return;
+    deleteGardenCreature(static_cast<std::size_t>(*index));
+}
+
+void onDebugAddCreatureClicked(lv_event_t*) {
+    addCreatureToGarden();
+    refreshDebugPanel();
+}
+
 
 void selectLabPage(LabPage page) {
     activeLabPage = page;
