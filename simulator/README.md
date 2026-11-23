@@ -37,6 +37,8 @@ The simulator opens the same 466 x 466 LVGL UI as the device, scaled up to 140% 
 
 The desktop audio backend uses the default Windows playback and capture devices. If Windows denies microphone permission or no device is available, the UI still runs and the debug panel reports the unavailable device.
 
+The simulator stores up to six creatures in `evolving_garden_save.bin` in its working directory. This file is local runtime data and is ignored by Git.
+
 ## Important
 
 This is a UI and application simulator, not a full ESP32 hardware emulator. It runs the same application code and LVGL widgets, but cannot reproduce the CO5300 panel's exact color response, touch controller behavior, timing jitter, PSRAM limits or audio codec characteristics.
