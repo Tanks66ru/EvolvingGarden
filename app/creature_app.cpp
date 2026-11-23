@@ -23,13 +23,13 @@ struct PetUi {
     lv_obj_t* mouth = nullptr;
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
+    lv_obj_t* screen = nullptr;
     lv_obj_t* status = nullptr;
-    lv_obj_t* actionButton = nullptr;
-    lv_obj_t* actionLabel = nullptr;
     lv_obj_t* impactRing = nullptr;
     lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
-    lv_obj_t* debugLabel = nullptr;
+    lv_obj_t* debugLeftLabel = nullptr;
+    lv_obj_t* debugRightLabel = nullptr;
     lv_obj_t* menuPanel = nullptr;
 };
 
@@ -63,6 +63,8 @@ bool saveRequested = false;
 float saveInterval = 0.0F;
 float secondsSinceSave = 1000.0F;
 float devicePitch = 0.0F;
+float backgroundRefreshSeconds = 0.0F;
+std::uint32_t currentBackgroundColor = 0x111B24;
 const char* messageOverride = nullptr;
 const char* lastStatus = nullptr;
 std::uint32_t lastMotionSteps = 0;
@@ -126,6 +128,63 @@ const char* actionTag(Action action) {
     case Action::Idle: break;
     }
     return "WANDERING";
+}
+
+std::uint32_t blendHex(std::uint32_t from, std::uint32_t to, float amount) {
+    const float t = std::clamp(amount, 0.0F, 1.0F);
+    const auto channel = [t](std::uint32_t a, std::uint32_t b, unsigned shift) {
+        const float first = static_cast<float>((a >> shift) & 0xFFU);
+        const float second = static_cast<float>((b >> shift) & 0xFFU);
+        return static_cast<std::uint32_t>(first + (second - first) * t + 0.5F);
+    };
+    return (channel(from, to, 16) << 16)
+        | (channel(from, to, 8) << 8)
+        | channel(from, to, 0);
+}
+
+void updateBackground(float dt) {
+    if (ui.screen == nullptr) return;
+    backgroundRefreshSeconds += dt;
+    if (backgroundRefreshSeconds < 0.12F) return;
+    backgroundRefreshSeconds = 0.0F;
+
+    const auto& genes = pet.genome().personality;
+    const auto trait01 = [](int value) {
+        return std::clamp((static_cast<float>(value) + 100.0F) / 200.0F, 0.0F, 1.0F);
+    };
+    const float optimism = trait01(genes.optimism);
+    const float friendliness = trait01(genes.friendliness);
+    const float moodTone = std::clamp((pet.mood() + 100.0F) / 200.0F, 0.0F, 1.0F);
+    const float characterTone = optimism * 0.65F + friendliness * 0.35F;
+
+    // Negative mood moves toward a deep blue; positive mood moves toward a muted green.
+    std::uint32_t target = blendHex(0x10182D, 0x183B31,
+        moodTone * 0.84F + characterTone * 0.16F);
+    target = blendHex(target, 0x1A3A35, characterTone * 0.10F);
+
+    const auto& emotions = pet.emotions();
+    float strongestEmotion = emotions.value(Emotion::Joy);
+    std::uint32_t emotionTint = 0x1D4435;
+    const auto considerTint = [&strongestEmotion, &emotionTint](
+        float strength, std::uint32_t tint) {
+        if (strength > strongestEmotion) {
+            strongestEmotion = strength;
+            emotionTint = tint;
+        }
+    };
+    considerTint(emotions.value(Emotion::Sadness), 0x111D3B);
+    considerTint(emotions.value(Emotion::Anger), 0x382027);
+    considerTint(emotions.value(Emotion::Fear), 0x202541);
+    considerTint(emotions.value(Emotion::Curiosity), 0x1E3543);
+    considerTint(emotions.value(Emotion::Affection), 0x194238);
+    considerTint(emotions.value(Emotion::Disgust), 0x302428);
+    const float emotionInfluence = std::clamp(
+        (strongestEmotion - 24.0F) / 220.0F, 0.0F, 0.30F);
+    target = blendHex(target, emotionTint, emotionInfluence);
+
+    // Ease the palette toward its target rather than flashing on every reaction.
+    currentBackgroundColor = blendHex(currentBackgroundColor, target, 0.24F);
+    lv_obj_set_style_bg_color(ui.screen, color(currentBackgroundColor), LV_PART_MAIN);
 }
 
 void setMessage(const char* message, float duration = 1.2F) {
@@ -192,31 +251,31 @@ void performHit(float touchX, float touchY) {
 }
 
 void refreshDebugPanel() {
-    if (ui.debugLabel == nullptr) return;
+    if (ui.debugLeftLabel == nullptr || ui.debugRightLabel == nullptr) return;
     const CreatureNeeds& needs = pet.needs();
+    const EmotionalState& emotions = pet.emotions();
     const motion::State sensor = motion::state();
-    char text[768]{};
-    std::snprintf(text, sizeof(text),
-        "MICROPHONE   %s   %u%%\n"
-        "SPEAKER      %s\n"
-        "NVS          %s\n"
-        "SAVE         %s\n"
-        "MOTION       %s\n"
-        "ORIENTATION  %s\n"
-        "SCREEN       %s\n\n"
-        "STEPS        %lu\n"
-        "SHAKES       %lu\n"
-        "TILTS        %lu\n"
-        "ROTATIONS    %lu\n"
-        "ROLL / PITCH %+.0f / %+.0f\n"
-        "ACCEL / GYRO %.1f / %.1f\n\n"
-        "HUNGER       %3.0f%%\n"
-        "ENERGY       %3.0f%%\n"
-        "SOCIAL       %3.0f%%\n"
-        "BOREDOM      %3.0f%%\n\n"
-        "MOOD         %+.0f\n"
-        "REACTION     %s\n"
-        "ACTION       %s",
+    char left[640]{};
+    char right[640]{};
+
+    std::snprintf(left, sizeof(left),
+        "DEVICE\n\n"
+        "MIC       %s  %u%%\n"
+        "SPEAKER   %s\n"
+        "STORAGE   %s\n"
+        "SAVE      %s\n"
+        "MOTION    %s\n"
+        "ORIENTATION\n  %s\n"
+        "SCREEN    %s\n\n"
+        "MOVEMENT\n\n"
+        "STEPS      %lu\n"
+        "SHAKES     %lu\n"
+        "TILTS      %lu\n"
+        "ROTATIONS  %lu\n"
+        "ROLL       %+.0f\n"
+        "PITCH      %+.0f\n"
+        "ACCEL      %.1f\n"
+        "GYRO       %.1f",
         audio::microphoneReady() ? "READY" : "OFF",
         static_cast<unsigned>(audio::microphoneLevelPercent()),
         audio::speakerReady() ? "READY" : "OFF",
@@ -230,10 +289,33 @@ void refreshDebugPanel() {
         static_cast<unsigned long>(sensor.tiltEvents),
         static_cast<unsigned long>(sensor.rotationEvents),
         sensor.rollDegrees, sensor.pitchDegrees,
-        sensor.linearAcceleration, sensor.angularVelocity,
+        sensor.linearAcceleration, sensor.angularVelocity);
+
+    std::snprintf(right, sizeof(right),
+        "CREATURE\n\n"
+        "MOOD      %+.0f\n"
+        "REACTION  %s\n"
+        "ACTION    %s\n\n"
+        "NEEDS\n\n"
+        "HUNGER    %3.0f%%\n"
+        "ENERGY    %3.0f%%\n"
+        "SOCIAL    %3.0f%%\n"
+        "BOREDOM   %3.0f%%\n\n"
+        "EMOTIONS\n\n"
+        "JOY       %3.0f\n"
+        "SADNESS   %3.0f\n"
+        "ANGER     %3.0f\n"
+        "FEAR      %3.0f\n"
+        "CURIOSITY %3.0f\n"
+        "AFFECTION %3.0f",
+        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()),
         needs.hunger, needs.energy, needs.social, needs.boredom,
-        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()));
-    lv_label_set_text(ui.debugLabel, text);
+        emotions.value(Emotion::Joy), emotions.value(Emotion::Sadness),
+        emotions.value(Emotion::Anger), emotions.value(Emotion::Fear),
+        emotions.value(Emotion::Curiosity), emotions.value(Emotion::Affection));
+
+    lv_label_set_text(ui.debugLeftLabel, left);
+    lv_label_set_text(ui.debugRightLabel, right);
 }
 
 void showDebugPanel() {
@@ -261,7 +343,6 @@ void hideMenuPanel() {
     if (ui.menuPanel != nullptr) lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
 }
 
-void onActionClicked(lv_event_t*) { performFeed(); }
 void onDebugCloseClicked(lv_event_t*) { hideDebugPanel(); }
 void onMenuFeedClicked(lv_event_t*) {
     hideMenuPanel();
@@ -462,8 +543,9 @@ void createCreature(lv_obj_t* parent) {
 }
 
 void createUi() {
-    lv_obj_t* screen = lv_screen_active();
-    lv_obj_set_style_bg_color(screen, color(0x111B24), LV_PART_MAIN);
+    ui.screen = lv_screen_active();
+    lv_obj_t* screen = ui.screen;
+    lv_obj_set_style_bg_color(screen, color(currentBackgroundColor), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -488,18 +570,6 @@ void createUi() {
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
     lv_obj_set_pos(ui.status, 23, 354);
-
-    ui.actionButton = lv_button_create(screen);
-    lv_obj_set_size(ui.actionButton, 280, 66);
-    lv_obj_set_pos(ui.actionButton, 93, 384);
-    lv_obj_set_style_bg_color(ui.actionButton, color(0xE5C98F), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(ui.actionButton, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(ui.actionButton, 24, LV_PART_MAIN);
-    lv_obj_set_style_border_width(ui.actionButton, 0, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(ui.actionButton, 0, LV_PART_MAIN);
-    lv_obj_add_event_cb(ui.actionButton, onActionClicked, LV_EVENT_CLICKED, nullptr);
-    ui.actionLabel = makeLabel(ui.actionButton, "FEED", &lv_font_montserrat_18, 0x14252C);
-    lv_obj_center(ui.actionLabel);
 
     ui.debugPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.debugPanel);
@@ -528,11 +598,39 @@ void createUi() {
     lv_obj_t* closeLabel = makeLabel(ui.debugCloseButton, "BACK", &lv_font_montserrat_12, 0xEAF2EF);
     lv_obj_center(closeLabel);
 
-    ui.debugLabel = makeLabel(ui.debugPanel, "", &lv_font_montserrat_12, 0xBDE5D5);
-    lv_obj_set_width(ui.debugLabel, 430);
-    lv_obj_set_pos(ui.debugLabel, 0, 54);
-    lv_obj_set_style_text_align(ui.debugLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-    lv_label_set_long_mode(ui.debugLabel, LV_LABEL_LONG_WRAP);
+    lv_obj_t* debugLeftCard = lv_obj_create(ui.debugPanel);
+    lv_obj_remove_style_all(debugLeftCard);
+    lv_obj_set_size(debugLeftCard, 207, 350);
+    lv_obj_set_pos(debugLeftCard, 0, 54);
+    lv_obj_set_style_bg_color(debugLeftCard, color(0x1A2A35), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(debugLeftCard, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(debugLeftCard, 16, LV_PART_MAIN);
+    lv_obj_set_style_border_width(debugLeftCard, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(debugLeftCard, color(0x344B58), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(debugLeftCard, 10, LV_PART_MAIN);
+    lv_obj_clear_flag(debugLeftCard, LV_OBJ_FLAG_SCROLLABLE);
+    ui.debugLeftLabel = makeLabel(debugLeftCard, "", &lv_font_montserrat_12, 0xBDE5D5);
+    lv_obj_set_width(ui.debugLeftLabel, 187);
+    lv_obj_set_pos(ui.debugLeftLabel, 0, 0);
+    lv_obj_set_style_text_align(ui.debugLeftLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_label_set_long_mode(ui.debugLeftLabel, LV_LABEL_LONG_WRAP);
+
+    lv_obj_t* debugRightCard = lv_obj_create(ui.debugPanel);
+    lv_obj_remove_style_all(debugRightCard);
+    lv_obj_set_size(debugRightCard, 207, 350);
+    lv_obj_set_pos(debugRightCard, 219, 54);
+    lv_obj_set_style_bg_color(debugRightCard, color(0x1D3038), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(debugRightCard, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(debugRightCard, 16, LV_PART_MAIN);
+    lv_obj_set_style_border_width(debugRightCard, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(debugRightCard, color(0x3A5A5D), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(debugRightCard, 10, LV_PART_MAIN);
+    lv_obj_clear_flag(debugRightCard, LV_OBJ_FLAG_SCROLLABLE);
+    ui.debugRightLabel = makeLabel(debugRightCard, "", &lv_font_montserrat_12, 0xD0E9DE);
+    lv_obj_set_width(ui.debugRightLabel, 187);
+    lv_obj_set_pos(ui.debugRightLabel, 0, 0);
+    lv_obj_set_style_text_align(ui.debugRightLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_label_set_long_mode(ui.debugRightLabel, LV_LABEL_LONG_WRAP);
 
     lv_obj_t* debugHint = makeLabel(ui.debugPanel, "BOOT: BACK TO CREATURE", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_width(debugHint, 430);
@@ -590,36 +688,24 @@ void updateCreatureVisuals() {
     float bodyOffsetX = std::clamp(deviceRoll * 0.14F, -10.0F, 10.0F);
     float bodyOffsetY = std::clamp(devicePitch * 0.12F, -9.0F, 9.0F);
     const float hitElapsed = animationTime - lastHitAnimation;
-    if (hitElapsed >= 0.0F && hitElapsed < 0.72F) {
-        const float envelope = std::sin((hitElapsed / 0.72F) * 3.14159265F);
-        if (pet.enjoysSparring()) {
-            // Dodge first, then make a short counter-lunge.
-            if (hitElapsed < 0.20F) bodyOffsetX -= hitDirection * 24.0F * envelope;
-            else bodyOffsetX += hitDirection * 15.0F * envelope;
-            bodyOffsetY -= 5.0F * envelope;
-        } else {
-            bodyOffsetX -= hitDirection * 11.0F * envelope;
-            bodyOffsetY += 4.0F * envelope;
-        }
-    }
-    if (hitElapsed >= 0.0F && hitElapsed < 0.40F) {
-        const float decay = std::exp(-hitElapsed * 12.0F);
-        bodyOffsetX += std::sin(hitElapsed * 68.0F) * 12.0F * decay;
-        bodyOffsetY += std::cos(hitElapsed * 61.0F) * 4.5F * decay;
+    if (hitElapsed >= 0.0F && hitElapsed < 0.16F) {
+        const float recoil = std::exp(-hitElapsed * 18.0F);
+        bodyOffsetX -= hitDirection * (pet.enjoysSparring() ? 5.0F : 3.0F) * recoil;
+        bodyOffsetY += (pet.enjoysSparring() ? -1.0F : 1.5F) * recoil;
     }
 
     if (ui.impactRing != nullptr) {
-        if (hitElapsed >= 0.0F && hitElapsed < 0.42F) {
-            const float progress = hitElapsed / 0.42F;
-            const int diameter = static_cast<int>(24.0F + progress * 156.0F);
+        if (hitElapsed >= 0.0F && hitElapsed < 0.24F) {
+            const float progress = hitElapsed / 0.24F;
+            const int diameter = static_cast<int>(24.0F + progress * 60.0F);
             lv_obj_set_size(ui.impactRing, diameter, diameter);
             lv_obj_set_pos(ui.impactRing,
                 static_cast<int>(hitPointX - diameter * 0.5F),
                 static_cast<int>(hitPointY - diameter * 0.5F));
             lv_obj_set_style_border_width(ui.impactRing,
-                static_cast<int>(6.0F - progress * 3.5F), LV_PART_MAIN);
+                static_cast<int>(3.5F - progress * 2.0F), LV_PART_MAIN);
             lv_obj_set_style_border_opa(ui.impactRing,
-                static_cast<lv_opa_t>(255.0F * (1.0F - progress)), LV_PART_MAIN);
+                static_cast<lv_opa_t>(190.0F * (1.0F - progress)), LV_PART_MAIN);
             lv_obj_clear_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
             lv_obj_move_to_index(ui.impactRing, -1);
         } else {
@@ -634,12 +720,27 @@ void updateCreatureVisuals() {
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
     if (reaction == Reaction::Curious) bodyX += 3.5F * reactionPower;
 
-    const float squash = hitElapsed >= 0.0F && hitElapsed < 0.20F
-        ? std::sin((hitElapsed / 0.20F) * 3.14159265F) * 0.11F : 0.0F;
+    float hitScale = 1.0F;
+    if (hitElapsed >= 0.0F && hitElapsed < 0.065F) {
+        const float t = hitElapsed / 0.065F;
+        const float eased = t * t * (3.0F - 2.0F * t);
+        hitScale = 1.0F - 0.10F * eased;
+    } else if (hitElapsed >= 0.065F && hitElapsed < 0.16F) {
+        const float t = (hitElapsed - 0.065F) / 0.095F;
+        const float eased = t * (2.0F - t);
+        hitScale = 0.90F + 0.12F * eased;
+    } else if (hitElapsed >= 0.16F && hitElapsed < 0.24F) {
+        const float t = (hitElapsed - 0.16F) / 0.08F;
+        const float eased = t * t * (3.0F - 2.0F * t);
+        hitScale = 1.02F - 0.02F * eased;
+    }
+
+    // Apply the same scale on both axes: the creature compresses and rebounds,
+    // but its proportions never stretch sideways.
     const int bodyWidth = static_cast<int>(291.0F
-        * (0.88F + genes.bodyWidth * 0.0024F) * (1.0F + squash));
+        * (0.88F + genes.bodyWidth * 0.0024F) * hitScale);
     const int bodyHeight = static_cast<int>(260.0F
-        * (0.88F + genes.bodyHeight * 0.0024F) * (1.0F - squash * 0.75F));
+        * (0.88F + genes.bodyHeight * 0.0024F) * hitScale);
     bodyY = 205.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
@@ -647,7 +748,7 @@ void updateCreatureVisuals() {
     lv_obj_set_size(ui.body, bodyWidth, bodyHeight);
     lv_obj_set_pos(ui.body, static_cast<int>(bodyX), static_cast<int>(bodyY));
     static bool previousHitFlash = false;
-    const bool hitFlash = hitElapsed >= 0.0F && hitElapsed < 0.075F;
+    const bool hitFlash = hitElapsed >= 0.0F && hitElapsed < 0.045F;
     if (hitFlash != previousHitFlash) {
         lv_obj_set_style_bg_color(ui.body, color(hitFlash ? 0xF4E2B2 : 0x64C5A7), LV_PART_MAIN);
         previousHitFlash = hitFlash;
@@ -836,6 +937,7 @@ void update(float deltaSeconds) {
     }
     pet.update(dt);
     updatePersistence(dt);
+    updateBackground(dt);
 
     const Reaction currentReaction = pet.reaction().kind();
     if (currentReaction == Reaction::None) lastAudioReaction = Reaction::None;
