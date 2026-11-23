@@ -14,6 +14,10 @@
 
 # Generated runtime data
 /saves/
+/evolving_garden_save.bin
+/evolving_garden_save.tmp
+/evolving_garden_legacy.bin
+/evolving_garden_legacy.tmp
 *.log
 
 # OS / editor noise
