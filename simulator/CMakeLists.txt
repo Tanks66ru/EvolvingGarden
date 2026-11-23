@@ -51,6 +51,7 @@ add_executable(EvolvingGardenSimulator
     ../third_party/pip_face/face.c
     ../platform/desktop/audio.cpp
     ../platform/desktop/motion.cpp
+    ../platform/desktop/persistence.cpp
 )
 
 target_include_directories(EvolvingGardenSimulator PRIVATE
