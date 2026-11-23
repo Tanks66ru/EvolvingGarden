@@ -222,32 +222,43 @@ lv_display_t* startDisplayWithTearingSync() {
     ESP_LOGI(Tag, "Initialize CO5300 QSPI display at %lu Hz",
         static_cast<unsigned long>(DisplayQspiClockHz));
 
-    const spi_bus_config_t busConfig = CO5300_PANEL_BUS_QSPI_CONFIG(
-        BSP_LCD_PCLK, BSP_LCD_DATA0, BSP_LCD_DATA1, BSP_LCD_DATA2, BSP_LCD_DATA3,
-        DisplayWidth * DisplayHeight * DisplayBitsPerPixel / 8);
+    spi_bus_config_t busConfig{};
+    busConfig.sclk_io_num = BSP_LCD_PCLK;
+    busConfig.data0_io_num = BSP_LCD_DATA0;
+    busConfig.data1_io_num = BSP_LCD_DATA1;
+    busConfig.data2_io_num = BSP_LCD_DATA2;
+    busConfig.data3_io_num = BSP_LCD_DATA3;
+    busConfig.max_transfer_sz =
+        DisplayWidth * DisplayHeight * DisplayBitsPerPixel / 8;
     ESP_ERROR_CHECK(spi_bus_initialize(BSP_LCD_SPI_NUM, &busConfig, SPI_DMA_CH_AUTO));
 
-    esp_lcd_panel_io_spi_config_t ioConfig =
-        CO5300_PANEL_IO_QSPI_CONFIG(BSP_LCD_CS, nullptr, nullptr);
+    esp_lcd_panel_io_spi_config_t ioConfig{};
+    ioConfig.cs_gpio_num = BSP_LCD_CS;
+    ioConfig.dc_gpio_num = -1;
+    ioConfig.spi_mode = 0;
     ioConfig.pclk_hz = DisplayQspiClockHz;
     ioConfig.trans_queue_depth = CONFIG_BSP_LCD_TRANS_QUEUE_DEPTH;
-    co5300_vendor_config_t vendorConfig = {
-        .init_cmds = displayInitCommands,
-        .init_cmds_size = static_cast<std::uint16_t>(
-            sizeof(displayInitCommands) / sizeof(displayInitCommands[0])),
-        .flags = {.use_qspi_interface = 1},
-    };
+    ioConfig.on_color_trans_done = nullptr;
+    ioConfig.user_ctx = nullptr;
+    ioConfig.lcd_cmd_bits = 32;
+    ioConfig.lcd_param_bits = 8;
+    ioConfig.flags.quad_mode = true;
+
+    co5300_vendor_config_t vendorConfig{};
+    vendorConfig.init_cmds = displayInitCommands;
+    vendorConfig.init_cmds_size = static_cast<std::uint16_t>(
+        sizeof(displayInitCommands) / sizeof(displayInitCommands[0]));
+    vendorConfig.flags.use_qspi_interface = 1;
 
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(
         static_cast<esp_lcd_spi_bus_handle_t>(BSP_LCD_SPI_NUM),
         &ioConfig, &displayPanelIo));
 
-    const esp_lcd_panel_dev_config_t panelConfig = {
-        .reset_gpio_num = BSP_LCD_RST,
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
-        .bits_per_pixel = DisplayBitsPerPixel,
-        .vendor_config = &vendorConfig,
-    };
+    esp_lcd_panel_dev_config_t panelConfig{};
+    panelConfig.reset_gpio_num = BSP_LCD_RST;
+    panelConfig.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
+    panelConfig.bits_per_pixel = DisplayBitsPerPixel;
+    panelConfig.vendor_config = &vendorConfig;
     ESP_ERROR_CHECK(esp_lcd_new_panel_co5300(
         displayPanelIo, &panelConfig, &displayPanel));
     ESP_ERROR_CHECK(esp_lcd_panel_set_gap(displayPanel, 0x06, 0));
@@ -258,31 +269,27 @@ lv_display_t* startDisplayWithTearingSync() {
     esp_lv_adapter_config_t adapterConfig = ESP_LV_ADAPTER_DEFAULT_CONFIG();
     ESP_ERROR_CHECK(esp_lv_adapter_init(&adapterConfig));
 
-    const esp_lv_adapter_display_config_t displayConfig = {
-        .panel = displayPanel,
-        .panel_io = displayPanelIo,
-        .profile = {
-            .interface = ESP_LV_ADAPTER_PANEL_IF_OTHER,
-            .rotation = ESP_LV_ADAPTER_ROTATE_0,
-            .hor_res = DisplayWidth,
-            .ver_res = DisplayHeight,
-            .buffer_height = 50,
-            .use_psram = true,
-            .enable_ppa_accel = false,
-            .require_double_buffer = false,
-        },
-        .tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC,
-        .te_sync = {
-            .gpio_num = DisplayTearingEffectPin,
-            .time_tvdl_ms = 13,
-            .time_tvdh_ms = 1,
-            .bus_freq_hz = DisplayQspiClockHz,
-            .data_lines = 4,
-            .bits_per_pixel = DisplayBitsPerPixel,
-            .intr_type = GPIO_INTR_POSEDGE,
-            .refresh_window_percent = 66,
-        },
-    };
+    esp_lv_adapter_display_config_t displayConfig{};
+    displayConfig.panel = displayPanel;
+    displayConfig.panel_io = displayPanelIo;
+    displayConfig.profile.interface = ESP_LV_ADAPTER_PANEL_IF_OTHER;
+    displayConfig.profile.rotation = ESP_LV_ADAPTER_ROTATE_0;
+    displayConfig.profile.hor_res = DisplayWidth;
+    displayConfig.profile.ver_res = DisplayHeight;
+    displayConfig.profile.buffer_height = 50;
+    displayConfig.profile.use_psram = true;
+    displayConfig.profile.enable_ppa_accel = false;
+    displayConfig.profile.require_double_buffer = false;
+    displayConfig.profile.mono_layout = ESP_LV_ADAPTER_MONO_LAYOUT_NONE;
+    displayConfig.tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC;
+    displayConfig.te_sync.gpio_num = DisplayTearingEffectPin;
+    displayConfig.te_sync.time_tvdl_ms = 13;
+    displayConfig.te_sync.time_tvdh_ms = 1;
+    displayConfig.te_sync.bus_freq_hz = DisplayQspiClockHz;
+    displayConfig.te_sync.data_lines = 4;
+    displayConfig.te_sync.bits_per_pixel = DisplayBitsPerPixel;
+    displayConfig.te_sync.intr_type = GPIO_INTR_POSEDGE;
+    displayConfig.te_sync.refresh_window_percent = 66;
 
     lv_display_t* display = esp_lv_adapter_register_display(&displayConfig);
     if (display == nullptr) {
@@ -292,20 +299,22 @@ lv_display_t* startDisplayWithTearingSync() {
     lv_display_add_event_cb(
         display, roundDisplayInvalidationArea, LV_EVENT_INVALIDATE_AREA, nullptr);
 
-    bsp_display_cfg_t touchBspConfig = {
-        .lv_adapter_cfg = adapterConfig,
-        .rotation = ESP_LV_ADAPTER_ROTATE_0,
-        .tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC,
-        .touch_flags = {
-            .swap_xy = 0,
-            .mirror_x = 1,
-            .mirror_y = 1,
-        },
-    };
+    bsp_display_cfg_t touchBspConfig{};
+    touchBspConfig.lv_adapter_cfg = adapterConfig;
+    touchBspConfig.rotation = ESP_LV_ADAPTER_ROTATE_0;
+    touchBspConfig.tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC;
+    touchBspConfig.touch_flags.swap_xy = 0;
+    touchBspConfig.touch_flags.mirror_x = 1;
+    touchBspConfig.touch_flags.mirror_y = 1;
     esp_lcd_touch_handle_t touchHandle = nullptr;
     ESP_ERROR_CHECK(bsp_touch_new(&touchBspConfig, &touchHandle));
-    const esp_lv_adapter_touch_config_t touchConfig =
-        ESP_LV_ADAPTER_TOUCH_DEFAULT_CONFIG(display, touchHandle);
+    esp_lv_adapter_touch_config_t touchConfig{};
+    touchConfig.disp = display;
+    touchConfig.handle = touchHandle;
+    touchConfig.scale.x = 1.0F;
+    touchConfig.scale.y = 1.0F;
+    touchConfig.multi_touch.mode = ESP_LV_ADAPTER_TOUCH_MODE_SINGLE;
+    touchConfig.multi_touch.pointers = 1;
     if (esp_lv_adapter_register_touch(&touchConfig) == nullptr) {
         ESP_LOGE(Tag, "Could not register CST9217 touchscreen");
         return nullptr;
