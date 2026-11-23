@@ -9,6 +9,7 @@
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
 
+#include <algorithm>
 #include <cstdint>
 
 namespace {
@@ -22,6 +23,7 @@ bool adminButtonReady = false;
 i2c_master_dev_handle_t pmuHandle = nullptr;
 bool pmuButtonReady = false;
 float pmuPollSeconds = 0.0F;
+float batteryPollSeconds = 0.0F;
 float fpsLogSeconds = 0.0F;
 lv_display_t* activeDisplay = nullptr;
 bool buttonRawCandidate = false;
@@ -117,9 +119,34 @@ void pollPowerButton(float dt) {
     evolvinggarden::app::toggleMenuPanel();
 }
 
+void pollBattery(float dt) {
+    if (!pmuButtonReady) return;
+    batteryPollSeconds += dt;
+    if (batteryPollSeconds < 2.0F) return;
+    batteryPollSeconds = 0.0F;
+
+    // AXP2101 STATUS1 bit 3 indicates a connected battery; 0xA4 is fuel-gauge percent.
+    std::uint8_t status1 = 0;
+    if (!readPmuRegister(0x00, status1)) return;
+    if ((status1 & 0x08U) == 0U) {
+        evolvinggarden::app::setBatteryStatus(-1, false);
+        return;
+    }
+
+    std::uint8_t status2 = 0;
+    std::uint8_t batteryPercent = 0;
+    if (!readPmuRegister(0x01, status2)
+        || !readPmuRegister(0xA4, batteryPercent)) return;
+
+    const int safePercent = std::min(static_cast<int>(batteryPercent), 100);
+    const bool charging = (status2 >> 5U) == 0x01U;
+    evolvinggarden::app::setBatteryStatus(safePercent, charging);
+}
+
 void onFrame(lv_timer_t*) {
     pollAdminButton();
     pollPowerButton(FrameStepSeconds);
+    pollBattery(FrameStepSeconds);
     evolvinggarden::motion::update(FrameStepSeconds);
 
     const auto sensor = evolvinggarden::motion::state();
