@@ -18,9 +18,6 @@ idf_component_register(
         nvs_flash
         esp_driver_gpio
         esp_driver_i2c
-        esp_driver_spi
-        esp_lcd
-        esp_lcd_co5300
 )
 
 spiffs_create_partition_image(
