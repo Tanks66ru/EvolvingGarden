@@ -1032,6 +1032,13 @@ void initialize() {
         if (birthGenome.seed == 0U) birthGenome.seed = 0xA341316CU;
         pet = CreatureSimulation(birthGenome);
         requestSave();
+    } else if (pet.genome().seed == makeDefaultGenome().seed) {
+        // Give pre-name-system saves a one-time stable identity without resetting their simulation.
+        auto savedState = pet.persistentState();
+        savedState.genome.seed = esp_random();
+        if (savedState.genome.seed == 0U) savedState.genome.seed = 0xA341316CU;
+        (void)pet.restorePersistentState(savedState);
+        requestSave();
     }
     createUi();
     if (restoredFromSave) setMessage("WELCOME BACK", 2.0F);
