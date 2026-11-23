@@ -1152,7 +1152,7 @@ void updateCreatureVisuals() {
             lv_obj_set_style_transform_pivot_y(ui.brows[i], browHeight / 2, LV_PART_MAIN);
             lv_obj_set_pos(ui.brows[i],
                 canvasX + eyeCenterX - browWidth / 2,
-                canvasY + 100 - browHeight - 8);
+                canvasY + 10);
             const int browAngle = i == 0
                 ? (angryFace ? 215 : (happyFace ? 35 : 135))
                 : (angryFace ? -215 : (happyFace ? -35 : -135));
