@@ -1,4 +1,6 @@
 #include "lvgl.h"
+#include "esp_log.h"
+#include "esp_timer.h"
 
 #include "simulation/creature_simulation.hpp"
 #include "creatures/name_table.hpp"
@@ -31,6 +33,7 @@ struct PetUi {
     lv_obj_t* screen = nullptr;
     lv_obj_t* status = nullptr;
     lv_obj_t* impactRing = nullptr;
+    lv_obj_t* hitParticles[5]{};
     lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
     lv_obj_t* debugContentCard = nullptr;
@@ -130,6 +133,15 @@ std::uint32_t lastShakeEvents = 0;
 std::uint32_t lastTiltEvents = 0;
 std::uint32_t lastRotationEvents = 0;
 Reaction lastAudioReaction = Reaction::None;
+
+constexpr char RenderPerformanceTag[] = "GardenRender";
+float renderPerformanceWindowSeconds = 0.0F;
+std::uint64_t visualRenderSamples = 0;
+std::uint64_t visualRenderTotalUs = 0;
+std::uint64_t visualRenderMaxUs = 0;
+std::uint64_t eyeRenderSamples = 0;
+std::uint64_t eyeRenderTotalUs = 0;
+std::uint64_t eyeRenderMaxUs = 0;
 
 lv_color_t color(std::uint32_t hex) {
     return lv_color_hex(hex);
@@ -1025,6 +1037,21 @@ void createUi() {
         static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
     lv_obj_add_flag(ui.impactRing, LV_OBJ_FLAG_HIDDEN);
 
+    constexpr std::uint32_t HitParticleColors[5] = {
+        0xFFE3A7, 0xBDE5D5, 0xF1D39A, 0xA8DCC8, 0xFFE3A7
+    };
+    for (std::size_t i = 0; i < 5; ++i) {
+        ui.hitParticles[i] = lv_obj_create(screen);
+        lv_obj_remove_style_all(ui.hitParticles[i]);
+        lv_obj_set_size(ui.hitParticles[i], 10, 10);
+        lv_obj_set_style_bg_color(ui.hitParticles[i], color(HitParticleColors[i]), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(ui.hitParticles[i], LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_radius(ui.hitParticles[i], LV_RADIUS_CIRCLE, LV_PART_MAIN);
+        lv_obj_clear_flag(ui.hitParticles[i],
+            static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+        lv_obj_add_flag(ui.hitParticles[i], LV_OBJ_FLAG_HIDDEN);
+    }
+
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
     lv_obj_set_pos(ui.status, 23, 432);
@@ -1265,9 +1292,11 @@ void updatePipEyeCanvas(
     bool surprisedFace,
     bool curiousFace,
     bool disgustedFace,
+    bool hitReaction,
     bool hitFlash)
 {
     if (ui.eyeCanvas == nullptr || ui.eyeBuffer == nullptr) return;
+    const std::int64_t eyeRenderStartUs = esp_timer_get_time();
 
     const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
     const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
@@ -1296,6 +1325,17 @@ void updatePipEyeCanvas(
     constexpr float PipSpread = 0.55F;
     constexpr float PipHeadRadius =
         (237.0F / (2.0F * 0.5227F)) * PipScreenScale;
+
+    // Preserve the default Pip proportions while exposing inherited eye genes.
+    const auto& morphology = pet.genome().morphology;
+    const float defaultEyeScale = 0.90F + 62.0F * 0.0028F;
+    const float eyeGeneScale = std::clamp(
+        (0.90F + static_cast<float>(morphology.eyeSize) * 0.0028F)
+            / defaultEyeScale,
+        0.80F, 1.16F);
+    const float eyeSpacingScale = std::clamp(
+        0.80F + static_cast<float>(morphology.eyeSpacing) * 0.00416667F,
+        0.80F, 1.22F);
 
     float shapeWidth = 118.0F;
     float shapeHeight = 138.0F;
@@ -1336,6 +1376,19 @@ void updatePipEyeCanvas(
     } else if (curiousFace) {
         shapeWidth = 124.0F; shapeHeight = 148.0F;
         shapeTaper = -0.05F; pupilWidth = 0.50F; pupilHeight = 0.54F;
+    }
+
+    if (hitReaction) {
+        // A short pain squint; the spring system returns to the creature's
+        // actual emotional expression after the impact.
+        shapeWidth = 112.0F;
+        shapeHeight = 94.0F;
+        shapeRoll = 0.08F;
+        lid = 0.64F;
+        lidTilt = 0.18F;
+        smile = 0.0F;
+        pupilWidth = 0.22F;
+        pupilHeight = 0.26F;
     }
 
     // Every expressive parameter follows a damped spring, like Pip's native face
@@ -1417,8 +1470,8 @@ void updatePipEyeCanvas(
 
     for (int i = 0; i < 2; ++i) {
         const float side = i ? 1.0F : -1.0F;
-        const float phi = headYaw + side * PipSpread;
-        const float perspective = PipEyeScale
+        const float phi = headYaw + side * PipSpread * eyeSpacingScale;
+        const float perspective = PipEyeScale * eyeGeneScale
             * (1.0F + 0.35F * (std::cos(phi) - 0.8525F));
         const float xOffset = PipHeadRadius * std::sin(phi);
         const float yOffset = 240.0F * PipScreenScale * std::sin(headPitch);
@@ -1454,9 +1507,16 @@ void updatePipEyeCanvas(
 
     face_draw(&pipEyeFace, pixels, PipEyeCanvasWidth, PipEyeCanvasHeight);
     lv_obj_invalidate(ui.eyeCanvas);
+
+    const std::uint64_t eyeElapsedUs = static_cast<std::uint64_t>(
+        std::max<std::int64_t>(0, esp_timer_get_time() - eyeRenderStartUs));
+    ++eyeRenderSamples;
+    eyeRenderTotalUs += eyeElapsedUs;
+    eyeRenderMaxUs = std::max(eyeRenderMaxUs, eyeElapsedUs);
 }
 
 void updateCreatureVisuals(float deltaSeconds) {
+    const std::int64_t visualRenderStartUs = esp_timer_get_time();
     const auto& genes = pet.genome().morphology;
     const float activity = static_cast<float>(pet.genome().personality.activity + 100) / 200.0F;
     const float phase = animationTime;
@@ -1489,6 +1549,32 @@ void updateCreatureVisuals(float deltaSeconds) {
         bodyOffsetY += (pet.enjoysSparring() ? -1.0F : 1.5F) * recoil;
     }
 
+    constexpr float HitParticleAngles[5] = {
+        -2.65F, -1.55F, -0.35F, 0.85F, 2.05F
+    };
+    for (std::size_t i = 0; i < 5; ++i) {
+        lv_obj_t* particle = ui.hitParticles[i];
+        if (particle == nullptr) continue;
+        if (hitElapsed >= 0.0F && hitElapsed < 0.28F) {
+            const float progress = hitElapsed / 0.28F;
+            const float distance = 12.0F
+                + progress * (25.0F + static_cast<float>(i % 3) * 4.0F);
+            const int diameter = std::max(3, static_cast<int>(10.0F - progress * 7.0F));
+            const float angle = HitParticleAngles[i];
+            const float x = hitPointX + std::cos(angle) * distance;
+            const float y = hitPointY + std::sin(angle) * distance + progress * progress * 12.0F;
+            lv_obj_set_size(particle, diameter, diameter);
+            lv_obj_set_pos(particle,
+                static_cast<int>(x - diameter * 0.5F),
+                static_cast<int>(y - diameter * 0.5F));
+            lv_obj_set_style_bg_opa(
+                particle, static_cast<lv_opa_t>(220.0F * (1.0F - progress)), LV_PART_MAIN);
+            lv_obj_clear_flag(particle, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(particle, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
     if (ui.impactRing != nullptr) {
         if (hitElapsed >= 0.0F && hitElapsed < 0.24F) {
             const float progress = hitElapsed / 0.24F;
@@ -1515,27 +1601,30 @@ void updateCreatureVisuals(float deltaSeconds) {
     if (angryFace) bodyX += std::sin(phase * 18.0F) * 2.5F;
     if (reaction == Reaction::Curious) bodyX += 3.5F * reactionPower;
 
-    float hitScale = 1.0F;
+    float hitScaleX = 1.0F;
+    float hitScaleY = 1.0F;
     if (hitElapsed >= 0.0F && hitElapsed < 0.065F) {
         const float t = hitElapsed / 0.065F;
         const float eased = t * t * (3.0F - 2.0F * t);
-        hitScale = 1.0F - 0.10F * eased;
+        hitScaleX = 1.07F - 0.01F * eased;
+        hitScaleY = 0.90F + 0.01F * eased;
     } else if (hitElapsed >= 0.065F && hitElapsed < 0.16F) {
         const float t = (hitElapsed - 0.065F) / 0.095F;
         const float eased = t * (2.0F - t);
-        hitScale = 0.90F + 0.12F * eased;
+        hitScaleX = 1.06F - 0.10F * eased;
+        hitScaleY = 0.91F + 0.14F * eased;
     } else if (hitElapsed >= 0.16F && hitElapsed < 0.24F) {
         const float t = (hitElapsed - 0.16F) / 0.08F;
         const float eased = t * t * (3.0F - 2.0F * t);
-        hitScale = 1.02F - 0.02F * eased;
+        hitScaleX = 0.96F + 0.04F * eased;
+        hitScaleY = 1.05F - 0.05F * eased;
     }
 
-    // Apply the same scale on both axes: the creature compresses and rebounds,
-    // but its proportions never stretch sideways.
+    // Asymmetric squash-and-stretch adds impact without another animation system.
     const int bodyWidth = static_cast<int>(
-        392.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyWidth) * 0.0011F) * hitScale);
+        392.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyWidth) * 0.0011F) * hitScaleX);
     const int bodyHeight = static_cast<int>(
-        374.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyHeight) * 0.0011F) * hitScale);
+        374.0F * 0.95F * (0.94F + static_cast<float>(genes.bodyHeight) * 0.0011F) * hitScaleY);
     bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
@@ -1592,17 +1681,21 @@ void updateCreatureVisuals(float deltaSeconds) {
         gazeX = std::clamp(gazeX, -8.0F, 8.0F);
         gazeY = std::clamp(gazeY, -6.0F, 6.0F);
 
+        const bool hitReaction = hitElapsed >= 0.0F && hitElapsed < 0.22F;
         updatePipEyeCanvas(bodyWidth, bodyHeight, phase, deltaSeconds, gazeX, gazeY,
             angryFace, sadFace, happyFace, afraidFace, surprisedFace,
-            curiousFace, disgustedFace, hitFlash);
+            curiousFace, disgustedFace, hitReaction, hitFlash);
 
     } else {
     const float eyeScale = 0.90F + static_cast<float>(genes.eyeSize) * 0.0028F;
     const int eyeWidth = static_cast<int>(78.0F * eyeScale);
     const int baseEyeHeight = static_cast<int>(90.0F * eyeScale);
     const int eyeY = static_cast<int>(bodyHeight * 0.26F);
-    const int leftX = static_cast<int>(bodyWidth * 0.22F);
-    const int rightX = static_cast<int>(bodyWidth * 0.58F);
+    const float eyeSpacingScale = std::clamp(
+        0.80F + static_cast<float>(genes.eyeSpacing) * 0.00416667F,
+        0.80F, 1.22F);
+    const int leftX = static_cast<int>(bodyWidth * (0.40F - 0.18F * eyeSpacingScale));
+    const int rightX = static_cast<int>(bodyWidth * (0.40F + 0.18F * eyeSpacingScale));
 
     float gazeX = std::sin(phase * 0.72F) * 5.5F + std::sin(phase * 0.21F) * 2.0F;
     float gazeY = std::cos(phase * 0.51F) * 3.0F;
@@ -1622,6 +1715,9 @@ void updateCreatureVisuals(float deltaSeconds) {
     else if (happyFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.76F);
     else if (sadFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.84F);
     else if (surprisedFace || afraidFace) eyeHeight = static_cast<int>(baseEyeHeight * 1.08F);
+    if (hitElapsed >= 0.0F && hitElapsed < 0.22F) {
+        eyeHeight = static_cast<int>(baseEyeHeight * 0.43F);
+    }
     if (blink) eyeHeight = 7;
 
     static bool previousBlink = false;
@@ -1673,6 +1769,40 @@ void updateCreatureVisuals(float deltaSeconds) {
         messageOverride = nullptr;
         setStatus(pet.reaction().active() ? reactionName(reaction) : actionTag(pet.action()));
     }
+
+    const std::uint64_t visualElapsedUs = static_cast<std::uint64_t>(
+        std::max<std::int64_t>(0, esp_timer_get_time() - visualRenderStartUs));
+    ++visualRenderSamples;
+    visualRenderTotalUs += visualElapsedUs;
+    visualRenderMaxUs = std::max(visualRenderMaxUs, visualElapsedUs);
+}
+
+void logRenderPerformance(float deltaSeconds) {
+    renderPerformanceWindowSeconds += deltaSeconds;
+    if (renderPerformanceWindowSeconds < 2.0F) return;
+
+    if (visualRenderSamples > 0U) {
+        const std::uint64_t visualAverageUs = visualRenderTotalUs / visualRenderSamples;
+        const std::uint64_t eyeAverageUs = eyeRenderSamples > 0U
+            ? eyeRenderTotalUs / eyeRenderSamples : 0U;
+        ESP_LOGI(RenderPerformanceTag,
+            "Visual avg/max %llu/%llu us; Pip eyes avg/max %llu/%llu us; samples=%llu",
+            static_cast<unsigned long long>(visualAverageUs),
+            static_cast<unsigned long long>(visualRenderMaxUs),
+            static_cast<unsigned long long>(eyeAverageUs),
+            static_cast<unsigned long long>(eyeRenderMaxUs),
+            static_cast<unsigned long long>(visualRenderSamples));
+    } else {
+        ESP_LOGI(RenderPerformanceTag, "Visual timing paused (overlay or screen sleep)");
+    }
+
+    renderPerformanceWindowSeconds = 0.0F;
+    visualRenderSamples = 0;
+    visualRenderTotalUs = 0;
+    visualRenderMaxUs = 0;
+    eyeRenderSamples = 0;
+    eyeRenderTotalUs = 0;
+    eyeRenderMaxUs = 0;
 }
 
 audio::Cue cueForReaction(Reaction reaction) {
@@ -1840,6 +1970,7 @@ void update(float deltaSeconds) {
         refreshDebugPanel();
         nextDebugRefresh = animationTime + 0.20F;
     }
+    logRenderPerformance(dt);
 }
 
 } // namespace evolvinggarden::app
