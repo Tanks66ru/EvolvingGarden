@@ -15,7 +15,7 @@ Target: Waveshare ESP32-S3-Touch-AMOLED-1.75C, 466 x 466 AMOLED.
 - **PWR top button:** opens or closes the Garden menu. It is read from the AXP2101 PMIC over the I2C bus initialized by the BSP.
 - **BOOT bottom button:** opens or closes diagnostics; while the Garden menu is open it acts as Back. It is GPIO0, active-low. Holding BOOT during reset still enters ESP32 download mode.
 
-The built-in microphone sound-burst detection and reaction audio remain active. The serial monitor reports measured display refresh FPS every two seconds.
+The built-in microphone sound-burst detection and reaction audio remain active. The serial monitor reports measured display refresh FPS every two seconds. The shared UI also reports average and peak creature-visual and Pip eye-render CPU time every two seconds, which helps separate application rendering cost from panel refresh performance.
 
 ## AMOLED display startup
 
