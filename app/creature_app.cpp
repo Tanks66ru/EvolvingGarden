@@ -879,6 +879,8 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_set_style_border_width(ui.appendages[1], 3, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.appendages[1], color(0x21414C), LV_PART_MAIN);
     lv_obj_set_style_radius(ui.appendages[1], LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_transform_rotation(ui.appendages[0], -85, LV_PART_MAIN);
+    lv_obj_set_style_transform_rotation(ui.appendages[1], 85, LV_PART_MAIN);
 
     ui.appendages[2] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[2], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
@@ -1467,11 +1469,13 @@ void updateCreatureVisuals() {
     const int appendageLength = 32 + static_cast<int>(genes.appendageLength * 0.32F);
     const int sideAppendageWidth = appendageLength + 26;
     constexpr float sideAppendageOffset = 14.0F;
-    lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 20);
-    lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 20);
-    lv_obj_set_size(ui.appendages[2], 22, appendageLength + 18);
-    lv_obj_set_style_transform_rotation(ui.appendages[0], -85, LV_PART_MAIN);
-    lv_obj_set_style_transform_rotation(ui.appendages[1], 85, LV_PART_MAIN);
+    static int previousAppendageLength = -1;
+    if (appendageLength != previousAppendageLength) {
+        lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 20);
+        lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 20);
+        lv_obj_set_size(ui.appendages[2], 22, appendageLength + 18);
+        previousAppendageLength = appendageLength;
+    }
     lv_obj_set_pos(ui.appendages[0], static_cast<int>(bodyX - sideAppendageOffset),
         static_cast<int>(bodyY + bodyHeight * 0.54F + appendageWave * 5.0F * appendageBoost));
     lv_obj_set_pos(ui.appendages[1],
@@ -1479,10 +1483,14 @@ void updateCreatureVisuals() {
         static_cast<int>(bodyY + bodyHeight * 0.49F - appendageWave * 6.0F * appendageBoost));
     lv_obj_set_pos(ui.appendages[2], static_cast<int>(bodyX + bodyWidth * 0.47F),
         static_cast<int>(bodyY - appendageLength * 0.36F + std::sin(phase * 3.0F) * 4.0F));
-    for (int i = 0; i < 3; ++i) {
-        const bool visible = genes.appendageCount > i;
-        if (visible) lv_obj_clear_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_add_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
+    static int previousAppendageCount = -1;
+    if (static_cast<int>(genes.appendageCount) != previousAppendageCount) {
+        for (int i = 0; i < 3; ++i) {
+            const bool visible = genes.appendageCount > i;
+            if (visible) lv_obj_clear_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
+        }
+        previousAppendageCount = static_cast<int>(genes.appendageCount);
     }
 
 
