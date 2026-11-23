@@ -920,7 +920,7 @@ void updateCreatureVisuals() {
     const float appendageBoost = exaggerated ? 1.8F : 1.0F;
     const int appendageLength = 32 + static_cast<int>(genes.appendageLength * 0.32F);
     const int sideAppendageWidth = appendageLength + 32;
-    constexpr float sideAppendageOffset = 20.0F;
+    constexpr float sideAppendageOffset = 14.0F;
     lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 26);
     lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 26);
     lv_obj_set_size(ui.appendages[2], 26, appendageLength + 20);
@@ -940,7 +940,7 @@ void updateCreatureVisuals() {
     const float eyeScale = 0.90F + static_cast<float>(genes.eyeSize) * 0.0028F;
     const int eyeWidth = static_cast<int>(78.0F * eyeScale);
     const int baseEyeHeight = static_cast<int>(90.0F * eyeScale);
-    const int eyeY = static_cast<int>(bodyHeight * 0.25F);
+    const int eyeY = static_cast<int>(bodyHeight * 0.26F);
     const int leftX = static_cast<int>(bodyWidth * 0.22F);
     const int rightX = static_cast<int>(bodyWidth * 0.58F);
 
@@ -1018,7 +1018,7 @@ void updateCreatureVisuals() {
 
     int mouthWidth = 44;
     int mouthHeight = 9;
-    int mouthY = static_cast<int>(bodyHeight * 0.72F);
+    int mouthY = static_cast<int>(bodyHeight * 0.65F);
     if (happyFace) { mouthWidth = 48; mouthHeight = 12; mouthY -= 2; }
     if (sadFace) { mouthWidth = 33; mouthHeight = 7; mouthY += 5; }
     if (angryFace) { mouthWidth = 42; mouthHeight = 5; mouthY += 2; }
