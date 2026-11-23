@@ -921,43 +921,46 @@ void createCreature(lv_obj_t* parent) {
     // Only create the LVGL fallback eyes if the RGB565 Pip canvas could not be allocated.
     if (ui.eyeCanvas == nullptr) {
         for (int i = 0; i < 2; ++i) {
-        lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_EVENT_BUBBLE);
-        lv_obj_clear_flag(ui.eyes[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.eyes[i], 0xF1F3EE, LV_RADIUS_CIRCLE);
-        lv_obj_set_style_border_width(ui.eyes[i], 1, LV_PART_MAIN);
-        lv_obj_set_style_border_color(ui.eyes[i], color(0xAAB8B7), LV_PART_MAIN);
+            ui.eyes[i] = lv_obj_create(ui.body);
+            lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_EVENT_BUBBLE);
+            lv_obj_clear_flag(ui.eyes[i], LV_OBJ_FLAG_SCROLLABLE);
+            makeFlatObject(ui.eyes[i], 0xF1F3EE, LV_RADIUS_CIRCLE);
+            lv_obj_set_style_border_width(ui.eyes[i], 1, LV_PART_MAIN);
+            lv_obj_set_style_border_color(ui.eyes[i], color(0xAAB8B7), LV_PART_MAIN);
 
-        ui.pupils[i] = lv_obj_create(ui.eyes[i]);
-        lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_EVENT_BUBBLE);
-        lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.pupils[i], 0x15232D, LV_RADIUS_CIRCLE);
-        lv_obj_set_style_border_width(ui.pupils[i], 2, LV_PART_MAIN);
-        lv_obj_set_style_border_color(ui.pupils[i], color(0x506872), LV_PART_MAIN);
+            ui.pupils[i] = lv_obj_create(ui.eyes[i]);
+            lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_EVENT_BUBBLE);
+            lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_SCROLLABLE);
+            makeFlatObject(ui.pupils[i], 0x15232D, LV_RADIUS_CIRCLE);
+            lv_obj_set_style_border_width(ui.pupils[i], 2, LV_PART_MAIN);
+            lv_obj_set_style_border_color(ui.pupils[i], color(0x506872), LV_PART_MAIN);
 
-        ui.highlights[i] = lv_obj_create(ui.pupils[i]);
-        lv_obj_clear_flag(ui.highlights[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.highlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
-        lv_obj_set_size(ui.highlights[i], 10, 12);
-        lv_obj_set_pos(ui.highlights[i], 7, 8);
+            ui.highlights[i] = lv_obj_create(ui.pupils[i]);
+            lv_obj_clear_flag(ui.highlights[i], LV_OBJ_FLAG_SCROLLABLE);
+            makeFlatObject(ui.highlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
+            lv_obj_set_size(ui.highlights[i], 10, 12);
+            lv_obj_set_pos(ui.highlights[i], 7, 8);
 
-        ui.secondaryHighlights[i] = lv_obj_create(ui.pupils[i]);
-        lv_obj_clear_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.secondaryHighlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
-        lv_obj_set_size(ui.secondaryHighlights[i], 4, 4);
-        lv_obj_set_pos(ui.secondaryHighlights[i], 24, 29);
-
-        if (ui.eyeCanvas != nullptr) {
-            lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.highlights[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_HIDDEN);
+            ui.secondaryHighlights[i] = lv_obj_create(ui.pupils[i]);
+            lv_obj_clear_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_SCROLLABLE);
+            makeFlatObject(ui.secondaryHighlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
+            lv_obj_set_size(ui.secondaryHighlights[i], 4, 4);
+            lv_obj_set_pos(ui.secondaryHighlights[i], 24, 29);
         }
 
-        }
+        lv_obj_set_size(ui.eyes[0], 84, 96);
+        lv_obj_set_size(ui.eyes[1], 83, 96);
+        lv_obj_set_pos(ui.eyes[0], 86, 94);
+        lv_obj_set_pos(ui.eyes[1], 227, 94);
+        lv_obj_set_size(ui.pupils[0], 42, 60);
+        lv_obj_set_size(ui.pupils[1], 42, 60);
+        lv_obj_set_pos(ui.pupils[0], 21, 18);
+        lv_obj_set_pos(ui.pupils[1], 20, 18);
     }
 
     lv_obj_set_size(ui.body, 392, 374);
     lv_obj_set_pos(ui.body, 37, 46);
+}
 
 void createUi() {
     ui.screen = lv_screen_active();
