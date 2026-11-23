@@ -36,7 +36,7 @@ bool validGardenState(const GardenState& garden) {
 
 template <typename T>
 bool readSnapshot(const char* path, T& snapshot) {
-    FILE* file = std::fopen(path, "rb");
+    std::FILE* file = std::fopen(path, "rb");
     if (file == nullptr) return false;
 
     const bool readOk = std::fread(&snapshot, sizeof(snapshot), 1U, file) == 1U;
@@ -47,7 +47,7 @@ bool readSnapshot(const char* path, T& snapshot) {
 
 template <typename T>
 bool writeSnapshot(const char* path, const char* temporaryPath, const T& snapshot) {
-    FILE* file = std::fopen(temporaryPath, "wb");
+    std::FILE* file = std::fopen(temporaryPath, "wb");
     if (file == nullptr) return false;
 
     const bool writeOk = std::fwrite(&snapshot, sizeof(snapshot), 1U, file) == 1U;
@@ -60,7 +60,7 @@ bool writeSnapshot(const char* path, const char* temporaryPath, const T& snapsho
     // Windows does not replace an existing file with rename(), so remove the
     // old snapshot first. The temporary file prevents partial writes.
     if (std::remove(path) != 0) {
-        FILE* existing = std::fopen(path, "rb");
+        std::FILE* existing = std::fopen(path, "rb");
         if (existing != nullptr) {
             std::fclose(existing);
             std::remove(temporaryPath);
