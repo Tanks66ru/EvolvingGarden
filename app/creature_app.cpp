@@ -1334,8 +1334,8 @@ void updatePipEyeCanvas(
             / defaultEyeScale,
         0.80F, 1.16F);
     const float eyeSpacingScale = std::clamp(
-        0.80F + static_cast<float>(morphology.eyeSpacing) * 0.00416667F,
-        0.80F, 1.22F);
+        0.88F + static_cast<float>(morphology.eyeSpacing) * 0.0025F,
+        0.88F, 1.12F);
 
     float shapeWidth = 118.0F;
     float shapeHeight = 138.0F;
@@ -1484,7 +1484,7 @@ void updatePipEyeCanvas(
             + xOffset * std::cos(headRoll) - yOffset * std::sin(headRoll);
         eye.y = PipEyeCanvasHeight * 0.5F
             + xOffset * std::sin(headRoll) + yOffset * std::cos(headRoll);
-        eye.yaw = headYaw + side * PipSpread * 0.5F;
+        eye.yaw = headYaw + side * PipSpread * eyeSpacingScale * 0.5F;
         eye.pitch = headPitch;
         eye.roll = headRoll - side * shapeRoll;
         eye.taper = shapeTaper;
@@ -1692,8 +1692,8 @@ void updateCreatureVisuals(float deltaSeconds) {
     const int baseEyeHeight = static_cast<int>(90.0F * eyeScale);
     const int eyeY = static_cast<int>(bodyHeight * 0.26F);
     const float eyeSpacingScale = std::clamp(
-        0.80F + static_cast<float>(genes.eyeSpacing) * 0.00416667F,
-        0.80F, 1.22F);
+        0.88F + static_cast<float>(genes.eyeSpacing) * 0.0025F,
+        0.88F, 1.12F);
     const int leftX = static_cast<int>(bodyWidth * (0.40F - 0.18F * eyeSpacingScale));
     const int rightX = static_cast<int>(bodyWidth * (0.40F + 0.18F * eyeSpacingScale));
 
