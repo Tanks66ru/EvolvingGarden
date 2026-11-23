@@ -1119,7 +1119,7 @@ void createUi() {
     lv_obj_center(gardenBackLabel);
 
     lv_obj_t* gardenHint = makeLabel(
-        ui.gardenPanel, "SELECT A CREATURE  |  DEL TO REMOVE",
+        ui.gardenPanel, "TAP TO SET ACTIVE  |  DEL TO REMOVE",
         &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_width(gardenHint, 390);
     lv_obj_set_pos(gardenHint, 20, 54);
