@@ -7,9 +7,11 @@ A creature-evolution and virtual-pet project for the Waveshare ESP32-S3-Touch-AM
 - The large **FEED** button feeds the creature.
 - A short tap on the creature is a hit. Creatures with low friendliness enjoy sparring; friendly creatures dislike being hit.
 - Draw a circle around the creature in either direction to pet it. Each completed circle can trigger another response.
-- The physical **PWR** key opens the small Garden menu with FEED and CREATURE LAB.
+- The physical **PWR** key opens the Garden menu with MY GARDEN, FEED, CREATURE LAB and VOLUME.
+- **MY GARDEN** stores up to six creatures. Select a row to bring that creature to the main screen, or use **DEL** to remove it. The active creature is marked in the list.
+- The **CREATURE LAB** includes a debug-only **ADD CREATURE TO GARDEN** button. New creatures receive their own seed, name, morphology and personality genes.
 - The physical **BOOT** key opens or closes the diagnostic LAB panel; while the Garden menu is open, BOOT acts as Back.
-- Creature progress is saved to ESP32 NVS: steps, genome, needs, emotions, memories, relationship and behavior state.
+- Every Garden creature is saved to ESP32 NVS with its own genome, needs, emotions, memories, relationship and behavior state. Existing single-creature saves are migrated into the Garden automatically.
 - Walking while carrying the board increments the step counter. Every ten steps can produce a discovery.
 - Shake the board for a surprise/play response.
 - Tilt the board to trigger a balance/curiosity response.
