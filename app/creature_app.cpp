@@ -971,8 +971,10 @@ void updatePipEyeCanvas(
         eye.w = shapeWidth * perspective * PipScreenScale;
         eye.h = shapeHeight * perspective * PipScreenScale;
         eye.depth = shapeWidth * perspective * PipScreenScale * 0.5F;
-        eye.x = PipEyeCanvasWidth * 0.5F + xOffset;
-        eye.y = PipEyeCanvasHeight * 0.5F + yOffset;
+        eye.x = PipEyeCanvasWidth * 0.5F
+            + xOffset * std::cos(headRoll) - yOffset * std::sin(headRoll);
+        eye.y = PipEyeCanvasHeight * 0.5F
+            + xOffset * std::sin(headRoll) + yOffset * std::cos(headRoll);
         eye.yaw = headYaw + side * PipSpread * 0.5F;
         eye.pitch = headPitch;
         eye.roll = headRoll - side * shapeRoll;
