@@ -14,9 +14,8 @@ CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_FREERTOS_HZ=1000
 
-# LVGL 9 multi-core rendering and style cache for the ESP32-S3 dual-core CPU.
+# LVGL 9 parallel software draw units and ESP LVGL adapter FPS statistics.
 CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
-CONFIG_LV_OBJ_STYLE_CACHE=y
 CONFIG_ESP_LVGL_ADAPTER_ENABLE_FPS_STATS=y
 
 # LVGL 9 runtime and fonts used by the compact pet UI.
