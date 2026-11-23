@@ -23,14 +23,13 @@ struct PetUi {
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
     lv_obj_t* status = nullptr;
-    lv_obj_t* stepsLabel = nullptr;
-    lv_obj_t* hintLabel = nullptr;
     lv_obj_t* actionButton = nullptr;
     lv_obj_t* actionLabel = nullptr;
     lv_obj_t* impactRing = nullptr;
     lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
     lv_obj_t* debugLabel = nullptr;
+    lv_obj_t* menuPanel = nullptr;
 };
 
 struct CreatureTouchGesture {
@@ -69,7 +68,6 @@ std::uint32_t lastMotionSteps = 0;
 std::uint32_t lastShakeEvents = 0;
 std::uint32_t lastTiltEvents = 0;
 std::uint32_t lastRotationEvents = 0;
-std::uint32_t lastDisplayedSteps = 0xFFFFFFFFU;
 Reaction lastAudioReaction = Reaction::None;
 
 lv_color_t color(std::uint32_t hex) {
@@ -375,9 +373,7 @@ void createCreature(lv_obj_t* parent) {
     makeFlatObject(ui.body, 0x64C5A7, LV_RADIUS_CIRCLE);
     lv_obj_set_style_border_width(ui.body, 4, LV_PART_MAIN);
     lv_obj_set_style_border_color(ui.body, color(0x347E70), LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(ui.body, 18, LV_PART_MAIN);
-    lv_obj_set_style_shadow_opa(ui.body, 45, LV_PART_MAIN);
-    lv_obj_set_style_shadow_color(ui.body, color(0x0A151C), LV_PART_MAIN);
+    // Keep the creature flat: software shadow blur is expensive on the ESP32-S3.
     lv_obj_add_flag(ui.body, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.body, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.body, onCreaturePointer, LV_EVENT_ALL, nullptr);
