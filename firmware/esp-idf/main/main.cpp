@@ -1,14 +1,8 @@
 #include "app/creature_app.hpp"
 #include "bsp/esp-bsp.h"
-#include "bsp/display.h"
-#include "bsp/touch.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
-#include "driver/spi_master.h"
 #include "esp_err.h"
-#include "esp_lcd_co5300.h"
-#include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_ops.h"
 #include "esp_lv_adapter.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -35,8 +29,6 @@ float pmuPollSeconds = 0.0F;
 float batteryPollSeconds = 0.0F;
 float fpsLogSeconds = 0.0F;
 lv_display_t* activeDisplay = nullptr;
-esp_lcd_panel_handle_t displayPanel = nullptr;
-esp_lcd_panel_io_handle_t displayPanelIo = nullptr;
 bool buttonRawCandidate = false;
 bool buttonStablePressed = false;
 float buttonDebounceSeconds = 0.0F;
@@ -155,178 +147,6 @@ void pollBattery(float dt) {
     evolvinggarden::app::setBatteryStatus(safePercent, charging);
 }
 
-
-constexpr int DisplayWidth = 466;
-constexpr int DisplayHeight = 466;
-constexpr int DisplayBitsPerPixel = 16;
-constexpr std::uint32_t DisplayQspiClockHz = 80'000'000;
-constexpr gpio_num_t DisplayTearingEffectPin = GPIO_NUM_13;
-
-static const std::uint8_t displayPage20[] = {0x20};
-static const std::uint8_t displaySelectPage00[] = {0x00};
-static const std::uint8_t displayModeSelect[] = {0x10};
-static const std::uint8_t displayPanelMode[] = {0xA0};
-static const std::uint8_t displayDrive[] = {0x80};
-static const std::uint8_t displayRgb565[] = {0x55};
-static const std::uint8_t displayTeEnable[] = {0x00};
-static const std::uint8_t displayInterfaceMode[] = {0x20};
-static const std::uint8_t displayBrightness[] = {0xFF};
-static const std::uint8_t displayColumnRange[] = {0x00, 0x06, 0x01, 0xD7};
-static const std::uint8_t displayRowRange[] = {0x00, 0x00, 0x01, 0xD1};
-
-static const co5300_lcd_init_cmd_t displayInitCommands[] = {
-    {0xFE, displayPage20, sizeof(displayPage20), 0},
-    {0x19, displayModeSelect, sizeof(displayModeSelect), 0},
-    {0x1C, displayPanelMode, sizeof(displayPanelMode), 0},
-    {0xFE, displaySelectPage00, sizeof(displaySelectPage00), 0},
-    {0xC4, displayDrive, sizeof(displayDrive), 0},
-    {0x3A, displayRgb565, sizeof(displayRgb565), 0},
-    {0x35, displayTeEnable, sizeof(displayTeEnable), 0},
-    {0x53, displayInterfaceMode, sizeof(displayInterfaceMode), 0},
-    {0x51, displayBrightness, sizeof(displayBrightness), 0},
-    {0x63, displayBrightness, sizeof(displayBrightness), 0},
-    {0x2A, displayColumnRange, sizeof(displayColumnRange), 0},
-    {0x2B, displayRowRange, sizeof(displayRowRange), 600},
-    {0x11, nullptr, 0, 600},
-    {0x29, nullptr, 0, 0},
-};
-
-esp_err_t setDisplayBrightness(int percent) {
-    if (displayPanelIo == nullptr) return ESP_ERR_INVALID_STATE;
-    if (percent < 0 || percent > 100) return ESP_ERR_INVALID_ARG;
-
-    const std::uint8_t brightness =
-        static_cast<std::uint8_t>(percent * 255 / 100);
-    std::uint32_t command = 0x51;
-    command &= 0xFFU;
-    command <<= 8U;
-    command |= 0x02U << 24U;
-    return esp_lcd_panel_io_tx_param(displayPanelIo, command, &brightness, 1);
-}
-
-void roundDisplayInvalidationArea(lv_event_t* event) {
-    auto* area = static_cast<lv_area_t*>(lv_event_get_param(event));
-    if (area == nullptr) return;
-
-    const std::int32_t x1 = area->x1;
-    const std::int32_t x2 = area->x2;
-    const std::int32_t y1 = area->y1;
-    const std::int32_t y2 = area->y2;
-    area->x1 = static_cast<lv_coord_t>((x1 >> 1) << 1);
-    area->y1 = static_cast<lv_coord_t>((y1 >> 1) << 1);
-    area->x2 = static_cast<lv_coord_t>(((x2 >> 1) << 1) + 1);
-    area->y2 = static_cast<lv_coord_t>(((y2 >> 1) << 1) + 1);
-}
-
-lv_display_t* startDisplayWithTearingSync() {
-    ESP_LOGI(Tag, "Initialize CO5300 QSPI display at %lu Hz",
-        static_cast<unsigned long>(DisplayQspiClockHz));
-
-    spi_bus_config_t busConfig{};
-    busConfig.sclk_io_num = BSP_LCD_PCLK;
-    busConfig.data0_io_num = BSP_LCD_DATA0;
-    busConfig.data1_io_num = BSP_LCD_DATA1;
-    busConfig.data2_io_num = BSP_LCD_DATA2;
-    busConfig.data3_io_num = BSP_LCD_DATA3;
-    busConfig.max_transfer_sz =
-        DisplayWidth * DisplayHeight * DisplayBitsPerPixel / 8;
-    ESP_ERROR_CHECK(spi_bus_initialize(BSP_LCD_SPI_NUM, &busConfig, SPI_DMA_CH_AUTO));
-
-    esp_lcd_panel_io_spi_config_t ioConfig{};
-    ioConfig.cs_gpio_num = BSP_LCD_CS;
-    ioConfig.dc_gpio_num = -1;
-    ioConfig.spi_mode = 0;
-    ioConfig.pclk_hz = DisplayQspiClockHz;
-    ioConfig.trans_queue_depth = CONFIG_BSP_LCD_TRANS_QUEUE_DEPTH;
-    ioConfig.on_color_trans_done = nullptr;
-    ioConfig.user_ctx = nullptr;
-    ioConfig.lcd_cmd_bits = 32;
-    ioConfig.lcd_param_bits = 8;
-    ioConfig.flags.quad_mode = true;
-
-    co5300_vendor_config_t vendorConfig{};
-    vendorConfig.init_cmds = displayInitCommands;
-    vendorConfig.init_cmds_size = static_cast<std::uint16_t>(
-        sizeof(displayInitCommands) / sizeof(displayInitCommands[0]));
-    vendorConfig.flags.use_qspi_interface = 1;
-
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(
-        static_cast<esp_lcd_spi_bus_handle_t>(BSP_LCD_SPI_NUM),
-        &ioConfig, &displayPanelIo));
-
-    esp_lcd_panel_dev_config_t panelConfig{};
-    panelConfig.reset_gpio_num = BSP_LCD_RST;
-    panelConfig.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
-    panelConfig.bits_per_pixel = DisplayBitsPerPixel;
-    panelConfig.vendor_config = &vendorConfig;
-    ESP_ERROR_CHECK(esp_lcd_new_panel_co5300(
-        displayPanelIo, &panelConfig, &displayPanel));
-    ESP_ERROR_CHECK(esp_lcd_panel_set_gap(displayPanel, 0x06, 0));
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(displayPanel));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(displayPanel));
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(displayPanel, true));
-
-    esp_lv_adapter_config_t adapterConfig = ESP_LV_ADAPTER_DEFAULT_CONFIG();
-    ESP_ERROR_CHECK(esp_lv_adapter_init(&adapterConfig));
-
-    esp_lv_adapter_display_config_t displayConfig{};
-    displayConfig.panel = displayPanel;
-    displayConfig.panel_io = displayPanelIo;
-    displayConfig.profile.interface = ESP_LV_ADAPTER_PANEL_IF_OTHER;
-    displayConfig.profile.rotation = ESP_LV_ADAPTER_ROTATE_0;
-    displayConfig.profile.hor_res = DisplayWidth;
-    displayConfig.profile.ver_res = DisplayHeight;
-    displayConfig.profile.buffer_height = 50;
-    displayConfig.profile.use_psram = true;
-    displayConfig.profile.enable_ppa_accel = false;
-    displayConfig.profile.require_double_buffer = false;
-    displayConfig.profile.mono_layout = ESP_LV_ADAPTER_MONO_LAYOUT_NONE;
-    displayConfig.tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC;
-    displayConfig.te_sync.gpio_num = DisplayTearingEffectPin;
-    displayConfig.te_sync.time_tvdl_ms = 13;
-    displayConfig.te_sync.time_tvdh_ms = 1;
-    displayConfig.te_sync.bus_freq_hz = DisplayQspiClockHz;
-    displayConfig.te_sync.data_lines = 4;
-    displayConfig.te_sync.bits_per_pixel = DisplayBitsPerPixel;
-    displayConfig.te_sync.intr_type = GPIO_INTR_POSEDGE;
-    displayConfig.te_sync.refresh_window_percent = 66;
-
-    lv_display_t* display = esp_lv_adapter_register_display(&displayConfig);
-    if (display == nullptr) {
-        ESP_LOGE(Tag, "Could not register CO5300 display with TE synchronization");
-        return nullptr;
-    }
-    lv_display_add_event_cb(
-        display, roundDisplayInvalidationArea, LV_EVENT_INVALIDATE_AREA, nullptr);
-
-    bsp_display_cfg_t touchBspConfig{};
-    touchBspConfig.lv_adapter_cfg = adapterConfig;
-    touchBspConfig.rotation = ESP_LV_ADAPTER_ROTATE_0;
-    touchBspConfig.tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC;
-    touchBspConfig.touch_flags.swap_xy = 0;
-    touchBspConfig.touch_flags.mirror_x = 1;
-    touchBspConfig.touch_flags.mirror_y = 1;
-    esp_lcd_touch_handle_t touchHandle = nullptr;
-    ESP_ERROR_CHECK(bsp_touch_new(&touchBspConfig, &touchHandle));
-    esp_lv_adapter_touch_config_t touchConfig{};
-    touchConfig.disp = display;
-    touchConfig.handle = touchHandle;
-    touchConfig.scale.x = 1.0F;
-    touchConfig.scale.y = 1.0F;
-    touchConfig.multi_touch.mode = ESP_LV_ADAPTER_TOUCH_MODE_SINGLE;
-    touchConfig.multi_touch.pointers = 1;
-    if (esp_lv_adapter_register_touch(&touchConfig) == nullptr) {
-        ESP_LOGE(Tag, "Could not register CST9217 touchscreen");
-        return nullptr;
-    }
-
-    ESP_ERROR_CHECK(setDisplayBrightness(100));
-    ESP_ERROR_CHECK(esp_lv_adapter_start());
-    ESP_LOGI(Tag, "CO5300 TE synchronization enabled on GPIO%d",
-        static_cast<int>(DisplayTearingEffectPin));
-    return display;
-}
-
 void onFrame(lv_timer_t*) {
     pollAdminButton();
     pollPowerButton(FrameStepSeconds);
@@ -336,7 +156,7 @@ void onFrame(lv_timer_t*) {
     const auto sensor = evolvinggarden::motion::state();
     if (sensor.screenSleeping != displaySleeping) {
         displaySleeping = sensor.screenSleeping;
-        (void)setDisplayBrightness(displaySleeping ? 0 : activeBrightness);
+        (void)bsp_display_brightness_set(displaySleeping ? 0 : activeBrightness);
     }
 
     evolvinggarden::app::update(FrameStepSeconds);
@@ -370,13 +190,15 @@ void initializeGardenUiTask(void*) {
 
 extern "C" void app_main(void) {
     ESP_LOGI(Tag, "Starting EvolvingGarden on ESP32-S3-Touch-AMOLED-1.75C");
-    activeDisplay = startDisplayWithTearingSync();
+    activeDisplay = bsp_display_start();
     if (activeDisplay == nullptr) {
-        ESP_LOGE(Tag, "TE-synchronized display initialization failed");
+        ESP_LOGE(Tag, "Display initialization failed");
         return;
     }
     ESP_ERROR_CHECK(esp_lv_adapter_fps_stats_enable(activeDisplay, true));
-    activeBrightness = 100;
+
+    activeBrightness = bsp_display_brightness_get();
+    if (activeBrightness < 1) activeBrightness = 100;
 
     configureAdminButton();
     configurePowerButton();
