@@ -1,6 +1,7 @@
 #include "lvgl.h"
 
 #include "simulation/creature_simulation.hpp"
+#include "creatures/name_table.hpp"
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
 #include "platform/persistence.hpp"
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <esp_random.h>
 
 using namespace evolvinggarden;
 
@@ -28,8 +30,9 @@ struct PetUi {
     lv_obj_t* impactRing = nullptr;
     lv_obj_t* debugCloseButton = nullptr;
     lv_obj_t* debugPanel = nullptr;
-    lv_obj_t* debugLeftLabel = nullptr;
-    lv_obj_t* debugRightLabel = nullptr;
+    lv_obj_t* debugContentCard = nullptr;
+    lv_obj_t* debugContentLabel = nullptr;
+    lv_obj_t* debugTabButtons[3]{};
     lv_obj_t* menuPanel = nullptr;
     lv_obj_t* volumePanel = nullptr;
     lv_obj_t* volumeSlider = nullptr;
@@ -51,6 +54,10 @@ struct CreatureTouchGesture {
 
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
+enum class LabPage : std::uint8_t { Device, Creature, Gens };
+LabPage activeLabPage = LabPage::Device;
+int deviceBatteryPercent = -1;
+bool deviceBatteryCharging = false;
 CreatureTouchGesture creatureTouch;
 float animationTime = 0.0F;
 float messageUntil = 0.0F;
@@ -58,7 +65,7 @@ float nextDebugRefresh = 0.0F;
 float lastHitAnimation = -10.0F;
 float hitDirection = 1.0F;
 float hitPointX = 233.0F;
-float hitPointY = 205.0F;
+float hitPointY = 233.0F;
 float deviceRoll = 0.0F;
 bool storageReady = false;
 bool restoredFromSave = false;
@@ -254,76 +261,135 @@ void performHit(float touchX, float touchY) {
 }
 
 void refreshDebugPanel() {
-    if (ui.debugLeftLabel == nullptr || ui.debugRightLabel == nullptr) return;
+    if (ui.debugContentLabel == nullptr) return;
     const CreatureNeeds& needs = pet.needs();
     const EmotionalState& emotions = pet.emotions();
     const motion::State sensor = motion::state();
-    char left[640]{};
-    char right[640]{};
+    const Genome& genome = pet.genome();
+    char text[1500]{};
+    char batteryText[24]{};
+    if (deviceBatteryPercent < 0) std::snprintf(batteryText, sizeof(batteryText), "NOT DETECTED");
+    else std::snprintf(batteryText, sizeof(batteryText), "%d%%", deviceBatteryPercent);
 
-    std::snprintf(left, sizeof(left),
-        "DEVICE\n\n"
-        "MIC       %s  %u%%\n"
-        "SPEAKER   %s\n"
-        "STORAGE   %s\n"
-        "SAVE      %s\n"
-        "MOTION    %s\n"
-        "ORIENTATION\n  %s\n"
-        "SCREEN    %s\n\n"
-        "MOVEMENT\n\n"
-        "STEPS      %lu\n"
-        "SHAKES     %lu\n"
-        "TILTS      %lu\n"
-        "ROTATIONS  %lu\n"
-        "ROLL       %+.0f\n"
-        "PITCH      %+.0f\n"
-        "ACCEL      %.1f\n"
-        "GYRO       %.1f",
-        audio::microphoneReady() ? "READY" : "OFF",
-        static_cast<unsigned>(audio::microphoneLevelPercent()),
-        audio::speakerReady() ? "READY" : "OFF",
-        storageReady ? "READY" : "OFF",
-        saveRequested ? "PENDING" : "CLEAN",
-        sensor.ready ? "READY" : "OFF",
-        sensor.orientationCalibrated ? "CALIBRATED" : "HOLD FLAT",
-        sensor.screenSleeping ? "SLEEPING" : "AWAKE",
-        static_cast<unsigned long>(pet.stepsTaken()),
-        static_cast<unsigned long>(sensor.shakeEvents),
-        static_cast<unsigned long>(sensor.tiltEvents),
-        static_cast<unsigned long>(sensor.rotationEvents),
-        sensor.rollDegrees, sensor.pitchDegrees,
-        sensor.linearAcceleration, sensor.angularVelocity);
+    switch (activeLabPage) {
+    case LabPage::Device:
+        std::snprintf(text, sizeof(text),
+            "DEVICE STATUS\n\n"
+            "BATTERY     %s\nCHARGING    %s\n"
+            "MICROPHONE  %s  %u%%\nSPEAKER     %s\nVOLUME      %u%%\n"
+            "STORAGE     %s\nSAVE        %s\nMOTION      %s\n"
+            "ORIENTATION %s\nDISPLAY     %s\n\n"
+            "MOVEMENT\nSTEPS       %lu\nSHAKES      %lu\nTILTS       %lu\nROTATIONS   %lu\n\n"
+            "SENSORS\nROLL        %+.1f deg\nPITCH       %+.1f deg\n"
+            "ACCEL       %.2f m/s2\nGYRO        %.2f rad/s",
+            batteryText, deviceBatteryCharging ? "YES" : "NO",
+            audio::microphoneReady() ? "READY" : "OFF",
+            static_cast<unsigned>(audio::microphoneLevelPercent()),
+            audio::speakerReady() ? "READY" : "OFF",
+            static_cast<unsigned>(audio::volumePercent()),
+            storageReady ? "READY" : "OFF", saveRequested ? "PENDING" : "CLEAN",
+            sensor.ready ? "READY" : "OFF",
+            sensor.orientationCalibrated ? "CALIBRATED" : "HOLD FLAT",
+            sensor.screenSleeping ? "SLEEPING" : "AWAKE",
+            static_cast<unsigned long>(pet.stepsTaken()),
+            static_cast<unsigned long>(sensor.shakeEvents),
+            static_cast<unsigned long>(sensor.tiltEvents),
+            static_cast<unsigned long>(sensor.rotationEvents),
+            sensor.rollDegrees, sensor.pitchDegrees,
+            sensor.linearAcceleration, sensor.angularVelocity);
+        break;
 
-    std::snprintf(right, sizeof(right),
-        "CREATURE\n\n"
-        "MOOD      %+.0f\n"
-        "REACTION  %s\n"
-        "ACTION    %s\n\n"
-        "NEEDS\n\n"
-        "HUNGER    %3.0f%%\n"
-        "ENERGY    %3.0f%%\n"
-        "SOCIAL    %3.0f%%\n"
-        "BOREDOM   %3.0f%%\n\n"
-        "EMOTIONS\n\n"
-        "JOY       %3.0f\n"
-        "SADNESS   %3.0f\n"
-        "ANGER     %3.0f\n"
-        "FEAR      %3.0f\n"
-        "CURIOSITY %3.0f\n"
-        "AFFECTION %3.0f",
-        pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()),
-        needs.hunger, needs.energy, needs.social, needs.boredom,
-        emotions.value(Emotion::Joy), emotions.value(Emotion::Sadness),
-        emotions.value(Emotion::Anger), emotions.value(Emotion::Fear),
-        emotions.value(Emotion::Curiosity), emotions.value(Emotion::Affection));
+    case LabPage::Creature:
+        std::snprintf(text, sizeof(text),
+            "LIVE CREATURE STATUS\n\n"
+            "MOOD        %+.0f\nREACTION    %s\nACTION      %s\n"
+            "AFFECTION   %3.0f%%\nSTEPS       %lu\n\n"
+            "NEEDS\nENERGY      %s  (DEVICE BATTERY)\n"
+            "HUNGER      %3.0f%%\nSOCIAL      %3.0f%%\nBOREDOM     %3.0f%%\n\n"
+            "EMOTIONS\nJOY         %3.0f\nSADNESS     %3.0f\n"
+            "ANGER       %3.0f\nFEAR        %3.0f\nSURPRISE    %3.0f\n"
+            "CURIOSITY   %3.0f\nAFFECTION   %3.0f\nDISGUST     %3.0f",
+            pet.mood(), reactionName(pet.reaction().kind()), actionTag(pet.action()),
+            pet.affectionToPlayer(), static_cast<unsigned long>(pet.stepsTaken()),
+            batteryText, needs.hunger, needs.social, needs.boredom,
+            emotions.value(Emotion::Joy), emotions.value(Emotion::Sadness),
+            emotions.value(Emotion::Anger), emotions.value(Emotion::Fear),
+            emotions.value(Emotion::Surprise), emotions.value(Emotion::Curiosity),
+            emotions.value(Emotion::Affection), emotions.value(Emotion::Disgust));
+        break;
 
-    lv_label_set_text(ui.debugLeftLabel, left);
-    lv_label_set_text(ui.debugRightLabel, right);
+    case LabPage::Gens: {
+        const GeneratedCreatureName name = generateCreatureName(genome.seed);
+        char fullName[96]{};
+        if (name.title != nullptr)
+            std::snprintf(fullName, sizeof(fullName), "%s %s %s", name.title, name.adjective, name.noun);
+        else
+            std::snprintf(fullName, sizeof(fullName), "%s %s", name.adjective, name.noun);
+        const auto& p = genome.personality;
+        const auto& m = genome.morphology;
+        std::snprintf(text, sizeof(text),
+            "BIRTH RECORD\n\nNAME\n%s\nGENOME SEED  %08lX\n"
+            "TRAIT BUDGET %u  |  LEFT %d\n\nPERSONALITY GENES\n"
+            "Friendliness  %d\nOptimism      %d\nSociability   %d\n"
+            "Curiosity     %d\nActivity      %d\nSensitivity   %d\n\n"
+            "MORPHOLOGY GENES\nBody width       %u\nBody height      %u\n"
+            "Roundness        %u\nAsymmetry        %u\nSurface detail   %u\n"
+            "Appendage count  %u\nAppendage length %u\nAppendage curve  %u\n"
+            "Eye size         %u\nEye spacing      %u\nPigmentation     %u\n"
+            "Pattern density  %u\nPalette          %u",
+            fullName, static_cast<unsigned long>(genome.seed),
+            static_cast<unsigned>(genome.traitPointBudget), genome.remainingTraitPoints(),
+            static_cast<int>(p.friendliness), static_cast<int>(p.optimism),
+            static_cast<int>(p.sociability), static_cast<int>(p.curiosity),
+            static_cast<int>(p.activity), static_cast<int>(p.sensitivity),
+            static_cast<unsigned>(m.bodyWidth), static_cast<unsigned>(m.bodyHeight),
+            static_cast<unsigned>(m.roundness), static_cast<unsigned>(m.asymmetry),
+            static_cast<unsigned>(m.surfaceComplexity), static_cast<unsigned>(m.appendageCount),
+            static_cast<unsigned>(m.appendageLength), static_cast<unsigned>(m.appendageCurvature),
+            static_cast<unsigned>(m.eyeSize), static_cast<unsigned>(m.eyeSpacing),
+            static_cast<unsigned>(m.pigmentation), static_cast<unsigned>(m.patternDensity),
+            static_cast<unsigned>(m.palette));
+        break;
+    }
+    }
+    lv_label_set_text(ui.debugContentLabel, text);
+}
+
+void selectLabPage(LabPage page) {
+    activeLabPage = page;
+    const int activeIndex = static_cast<int>(page);
+    for (int i = 0; i < 3; ++i) {
+        if (ui.debugTabButtons[i] == nullptr) continue;
+        lv_obj_set_style_bg_color(ui.debugTabButtons[i],
+            color(i == activeIndex ? 0x72C7A8 : 0x344451), LV_PART_MAIN);
+    }
+    if (ui.debugContentCard != nullptr)
+        lv_obj_scroll_to_y(ui.debugContentCard, 0, LV_ANIM_OFF);
+    refreshDebugPanel();
+}
+void onLabDeviceClicked(lv_event_t*) { selectLabPage(LabPage::Device); }
+void onLabCreatureClicked(lv_event_t*) { selectLabPage(LabPage::Creature); }
+void onLabGensClicked(lv_event_t*) { selectLabPage(LabPage::Gens); }
+
+lv_obj_t* createLabTabButton(lv_obj_t* parent, int x, const char* text,
+                             lv_event_cb_t callback) {
+    lv_obj_t* button = lv_button_create(parent);
+    lv_obj_set_size(button, 126, 40);
+    lv_obj_set_pos(button, x, 48);
+    lv_obj_set_style_bg_color(button, color(0x344451), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(button, 13, LV_PART_MAIN);
+    lv_obj_set_style_border_width(button, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(button, callback, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* label = makeLabel(button, text, &lv_font_montserrat_12, 0xEAF2EF);
+    lv_obj_center(label);
+    return button;
 }
 
 void showDebugPanel() {
     motion::requestWake();
     if (ui.debugPanel == nullptr) return;
+    selectLabPage(LabPage::Device);
     refreshDebugPanel();
     lv_obj_clear_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_to_index(ui.debugPanel, -1);
@@ -461,7 +527,7 @@ void onCreaturePointer(lv_event_t* event) {
         creatureTouch.startY = y;
 
         const float offsetX = x - 233.0F;
-        const float offsetY = y - 205.0F;
+        const float offsetY = y - 233.0F;
         const float radius = std::sqrt(offsetX * offsetX + offsetY * offsetY);
         if (radius < 48.0F || radius > 158.0F) {
             creatureTouch.hasAngle = false;
@@ -612,7 +678,7 @@ void createUi() {
 
     ui.status = makeLabel(screen, "WAITING FOR YOU", &lv_font_montserrat_14, 0xBDE5D5);
     lv_obj_set_width(ui.status, 420);
-    lv_obj_set_pos(ui.status, 23, 354);
+    lv_obj_set_pos(ui.status, 23, 432);
 
     ui.debugPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.debugPanel);
@@ -641,44 +707,29 @@ void createUi() {
     lv_obj_t* closeLabel = makeLabel(ui.debugCloseButton, "BACK", &lv_font_montserrat_12, 0xEAF2EF);
     lv_obj_center(closeLabel);
 
-    lv_obj_t* debugLeftCard = lv_obj_create(ui.debugPanel);
-    lv_obj_remove_style_all(debugLeftCard);
-    lv_obj_set_size(debugLeftCard, 207, 350);
-    lv_obj_set_pos(debugLeftCard, 0, 54);
-    lv_obj_set_style_bg_color(debugLeftCard, color(0x1A2A35), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(debugLeftCard, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(debugLeftCard, 16, LV_PART_MAIN);
-    lv_obj_set_style_border_width(debugLeftCard, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(debugLeftCard, color(0x344B58), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(debugLeftCard, 10, LV_PART_MAIN);
-    lv_obj_clear_flag(debugLeftCard, LV_OBJ_FLAG_SCROLLABLE);
-    ui.debugLeftLabel = makeLabel(debugLeftCard, "", &lv_font_montserrat_12, 0xBDE5D5);
-    lv_obj_set_width(ui.debugLeftLabel, 187);
-    lv_obj_set_pos(ui.debugLeftLabel, 0, 0);
-    lv_obj_set_style_text_align(ui.debugLeftLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-    lv_label_set_long_mode(ui.debugLeftLabel, LV_LABEL_LONG_WRAP);
+    ui.debugTabButtons[0] = createLabTabButton(ui.debugPanel, 0, "DEVICE", onLabDeviceClicked);
+    ui.debugTabButtons[1] = createLabTabButton(ui.debugPanel, 134, "CREATURE", onLabCreatureClicked);
+    ui.debugTabButtons[2] = createLabTabButton(ui.debugPanel, 268, "GENS", onLabGensClicked);
 
-    lv_obj_t* debugRightCard = lv_obj_create(ui.debugPanel);
-    lv_obj_remove_style_all(debugRightCard);
-    lv_obj_set_size(debugRightCard, 207, 350);
-    lv_obj_set_pos(debugRightCard, 219, 54);
-    lv_obj_set_style_bg_color(debugRightCard, color(0x1D3038), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(debugRightCard, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(debugRightCard, 16, LV_PART_MAIN);
-    lv_obj_set_style_border_width(debugRightCard, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_color(debugRightCard, color(0x3A5A5D), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(debugRightCard, 10, LV_PART_MAIN);
-    lv_obj_clear_flag(debugRightCard, LV_OBJ_FLAG_SCROLLABLE);
-    ui.debugRightLabel = makeLabel(debugRightCard, "", &lv_font_montserrat_12, 0xD0E9DE);
-    lv_obj_set_width(ui.debugRightLabel, 187);
-    lv_obj_set_pos(ui.debugRightLabel, 0, 0);
-    lv_obj_set_style_text_align(ui.debugRightLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-    lv_label_set_long_mode(ui.debugRightLabel, LV_LABEL_LONG_WRAP);
-
-    lv_obj_t* debugHint = makeLabel(ui.debugPanel, "BOOT: BACK TO CREATURE", &lv_font_montserrat_12, 0x91AAA4);
-    lv_obj_set_width(debugHint, 430);
-    lv_obj_set_pos(debugHint, 0, 420);
-    refreshDebugPanel();
+    ui.debugContentCard = lv_obj_create(ui.debugPanel);
+    lv_obj_remove_style_all(ui.debugContentCard);
+    lv_obj_set_size(ui.debugContentCard, 430, 326);
+    lv_obj_set_pos(ui.debugContentCard, 0, 96);
+    lv_obj_set_style_bg_color(ui.debugContentCard, color(0x1A2A35), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.debugContentCard, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.debugContentCard, 16, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.debugContentCard, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.debugContentCard, color(0x344B58), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.debugContentCard, 12, LV_PART_MAIN);
+    lv_obj_add_flag(ui.debugContentCard, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(ui.debugContentCard, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(ui.debugContentCard, LV_SCROLLBAR_MODE_AUTO);
+    ui.debugContentLabel = makeLabel(ui.debugContentCard, "", &lv_font_montserrat_12, 0xBDE5D5);
+    lv_obj_set_width(ui.debugContentLabel, 400);
+    lv_obj_set_pos(ui.debugContentLabel, 0, 0);
+    lv_obj_set_style_text_align(ui.debugContentLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_label_set_long_mode(ui.debugContentLabel, LV_LABEL_LONG_WRAP);
+    selectLabPage(LabPage::Device);
 
     ui.menuPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.menuPanel);
@@ -840,7 +891,7 @@ void updateCreatureVisuals() {
         * (0.88F + genes.bodyWidth * 0.0024F) * hitScale);
     const int bodyHeight = static_cast<int>(260.0F
         * (0.88F + genes.bodyHeight * 0.0024F) * hitScale);
-    bodyY = 205.0F - static_cast<float>(bodyHeight) * 0.5F
+    bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
     bodyY += bodyOffsetY;
@@ -975,8 +1026,20 @@ audio::Cue cueForReaction(Reaction reaction) {
 void initialize() {
     storageReady = persistence::initialize();
     if (storageReady) restoredFromSave = persistence::load(pet);
+    if (!restoredFromSave) {
+        Genome birthGenome = makeDefaultGenome();
+        birthGenome.seed = esp_random();
+        if (birthGenome.seed == 0U) birthGenome.seed = 0xA341316CU;
+        pet = CreatureSimulation(birthGenome);
+        requestSave();
+    }
     createUi();
     if (restoredFromSave) setMessage("WELCOME BACK", 2.0F);
+}
+
+void setBatteryStatus(int percent, bool charging) {
+    deviceBatteryPercent = percent < 0 ? -1 : std::clamp(percent, 0, 100);
+    deviceBatteryCharging = charging && deviceBatteryPercent >= 0;
 }
 
 void toggleDebugPanel() {
