@@ -4,11 +4,11 @@ A creature-evolution and virtual-pet project for the Waveshare ESP32-S3-Touch-AM
 
 ## Physical interactions
 
-- The large **FEED** button feeds the creature. It is the only gameplay button.
+- The large **FEED** button feeds the creature.
 - A short tap on the creature is a hit. Creatures with low friendliness enjoy sparring; friendly creatures dislike being hit.
 - Draw a circle around the creature in either direction to pet it. Each completed circle can trigger another response.
-- Tap the creature to hit it. A short impact flash, expanding ring, squash/recoil animation and impact sound make the strike clearer.
-- Press the physical **BOOT** side button to open or close the diagnostic LAB panel. The on-screen LAB shortcut has been removed.
+- The physical **PWR** key opens the small Garden menu with FEED and CREATURE LAB.
+- The physical **BOOT** key opens or closes the diagnostic LAB panel; while the Garden menu is open, BOOT acts as Back.
 - Creature progress is saved to ESP32 NVS: steps, genome, needs, emotions, memories, relationship and behavior state.
 - Walking while carrying the board increments the step counter. Every ten steps can produce a discovery.
 - Shake the board for a surprise/play response.
