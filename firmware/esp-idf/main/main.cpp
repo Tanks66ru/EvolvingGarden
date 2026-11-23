@@ -8,6 +8,8 @@
 #include "platform/audio.hpp"
 #include "platform/motion.hpp"
 
+#include <cstdint>
+
 namespace {
 
 constexpr char Tag[] = "EvolvingGarden";
