@@ -1606,7 +1606,12 @@ void initialize() {
         gardenState.activeIndex = 0U;
         gardenState.creatures[0] = pet.persistentState();
         requestSave();
-    } else if (pet.genome().seed == makeDefaultGenome().seed) {
+    } else {
+        // Rewrite a migrated legacy save into the multi-creature Garden format.
+        requestSave();
+    }
+
+    if (restoredFromSave && pet.genome().seed == makeDefaultGenome().seed) {
         // Give pre-name-system saves a one-time stable identity without resetting simulation data.
         auto savedState = pet.persistentState();
         savedState.genome.seed = esp_random();
