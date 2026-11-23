@@ -506,7 +506,7 @@ void refreshGardenPanel() {
         if (gardenState.count <= 1U) {
             lv_obj_add_state(ui.gardenDeleteButtons[i], LV_STATE_DISABLED);
         } else {
-            lv_obj_clear_state(ui.gardenDeleteButtons[i], LV_STATE_DISABLED);
+            lv_obj_remove_state(ui.gardenDeleteButtons[i], LV_STATE_DISABLED);
         }
     }
 }
