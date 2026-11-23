@@ -751,10 +751,10 @@ void createUi() {
     lv_obj_add_event_cb(ui.volumeSlider, onVolumeSliderChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
     lv_obj_t* volumeMinimum = makeLabel(
-        ui.volumePanel, "MUTE", &lv_font_montserrat_10, 0x91AAA4);
+        ui.volumePanel, "MUTE", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_pos(volumeMinimum, 38, 169);
     lv_obj_t* volumeMaximum = makeLabel(
-        ui.volumePanel, "MAX", &lv_font_montserrat_10, 0x91AAA4);
+        ui.volumePanel, "MAX", &lv_font_montserrat_12, 0x91AAA4);
     lv_obj_set_pos(volumeMaximum, 364 - 38 - 38, 169);
 
     createMenuButton(ui.volumePanel, 188, "BACK TO GARDEN", 0xA8B9B5, onVolumeBackClicked);
