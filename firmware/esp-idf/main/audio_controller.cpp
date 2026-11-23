@@ -114,8 +114,21 @@ bool playWav(const char* path) {
     while (remaining > 0) {
         const std::size_t bytes = std::min<std::size_t>(sizeof(samples), remaining);
         const std::size_t count = std::fread(samples, 1, bytes, f);
-        if (count == 0 || (count & 1U) != 0
-            || esp_codec_dev_write(spk, samples, static_cast<int>(count)) != ESP_CODEC_DEV_OK) {
+        if (count == 0 || (count & 1U) != 0) {
+            ok = false;
+            break;
+        }
+
+        // Apply the same 2x digital gain to every WAV cue. Saturation prevents
+        // signed 16-bit overflow if a source file is already close to full scale.
+        const std::size_t sampleCount = count / sizeof(std::int16_t);
+        for (std::size_t i = 0; i < sampleCount; ++i) {
+            const std::int32_t amplified = static_cast<std::int32_t>(samples[i]) * 2;
+            samples[i] = static_cast<std::int16_t>(
+                std::clamp(amplified, -32768, 32767));
+        }
+
+        if (esp_codec_dev_write(spk, samples, static_cast<int>(count)) != ESP_CODEC_DEV_OK) {
             ok = false;
             break;
         }
@@ -142,7 +155,7 @@ void playTones(const Tone* tones, std::size_t toneCount) {
                 const float attack = std::min(1.0F, static_cast<float>(pos) / 110.0F);
                 const float release = std::min(1.0F, static_cast<float>(total - pos) / 220.0F);
                 samples[i] = static_cast<std::int16_t>(
-                    std::sin(phase) * 2600.0F * std::min(attack, release));
+                    std::sin(phase) * 5200.0F * std::min(attack, release));
                 phase += step;
             }
             if (esp_codec_dev_write(spk, samples,
@@ -296,8 +309,12 @@ void initialize() {
     spk = bsp_audio_codec_speaker_init();
     if (spk != nullptr && esp_codec_dev_open(spk, &format) == ESP_CODEC_DEV_OK) {
         speakerOnline.store(true);
-        esp_codec_dev_set_out_vol(spk, 46);
-        ESP_LOGI(Tag, "Speaker ready");
+        const esp_err_t volumeResult = esp_codec_dev_set_out_vol(spk, 100);
+        if (volumeResult != ESP_OK) {
+            ESP_LOGW(Tag, "Maximum speaker volume setup failed: %s", esp_err_to_name(volumeResult));
+        } else {
+            ESP_LOGI(Tag, "Speaker ready at maximum codec volume (100%%)");
+        }
     } else {
         spk = nullptr;
         ESP_LOGW(Tag, "Speaker unavailable");
