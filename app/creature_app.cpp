@@ -638,7 +638,7 @@ void createCreature(lv_obj_t* parent) {
     makeFlatObject(ui.mouth, 0x25333A, LV_RADIUS_CIRCLE);
 
     lv_obj_set_size(ui.body, 291, 260);
-    lv_obj_set_pos(ui.body, 87, 88);
+    lv_obj_set_pos(ui.body, 87, 103);
     lv_obj_set_size(ui.eyes[0], 66, 70);
     lv_obj_set_size(ui.eyes[1], 64, 70);
     lv_obj_set_pos(ui.eyes[0], 49, 76);
