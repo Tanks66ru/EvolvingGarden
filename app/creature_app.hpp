@@ -11,4 +11,7 @@ void update(float deltaSeconds);
 // Toggle diagnostics from the physical BOOT key.
 void toggleDebugPanel();
 
+// Open or close the creature menu from the PMIC power key.
+void toggleMenuPanel();
+
 } // namespace evolvinggarden::app
