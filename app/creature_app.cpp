@@ -66,8 +66,8 @@ PetUi ui;
 face_t pipEyeFace{};
 persistence::GardenState gardenState{};
 int gardenRowIndices[persistence::MaximumGardenCreatures]{};
-constexpr int PipEyeCanvasWidth = 280;
-constexpr int PipEyeCanvasHeight = 180;
+constexpr int PipEyeCanvasWidth = 256;
+constexpr int PipEyeCanvasHeight = 160;
 enum class LabPage : std::uint8_t { Device, Creature, Gens };
 LabPage activeLabPage = LabPage::Device;
 int deviceBatteryPercent = -1;
@@ -1267,7 +1267,7 @@ void updatePipEyeCanvas(
     pipEyeFace.blush = 0.0F;
 
     // Pip uses 118 x 138 neutral eye shapes, scaled by EYE_SCALE=1.45.
-    // The 280 px canvas is a 0.6009 scale of Pip's 466 px face coordinate space.
+    // The 256 px canvas is a 0.5494 scale of Pip's 466 px face coordinate space.
     constexpr float PipScreenScale =
         static_cast<float>(PipEyeCanvasWidth) / 466.0F;
     constexpr float PipEyeScale = 1.45F;
