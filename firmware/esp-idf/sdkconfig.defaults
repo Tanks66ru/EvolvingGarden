@@ -12,6 +12,8 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# Favor rendering speed over the smaller firmware image (-O2).
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_FREERTOS_HZ=1000
 
 # LVGL 9 parallel software draw units and ESP LVGL adapter FPS statistics.
