@@ -3,6 +3,7 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "esp_err.h"
+#include "esp_lv_adapter.h"
 #include "esp_log.h"
 #include "lvgl.h"
 #include "platform/audio.hpp"
@@ -21,6 +22,8 @@ bool adminButtonReady = false;
 i2c_master_dev_handle_t pmuHandle = nullptr;
 bool pmuButtonReady = false;
 float pmuPollSeconds = 0.0F;
+float fpsLogSeconds = 0.0F;
+lv_display_t* activeDisplay = nullptr;
 bool buttonRawCandidate = false;
 bool buttonStablePressed = false;
 float buttonDebounceSeconds = 0.0F;
@@ -126,16 +129,27 @@ void onFrame(lv_timer_t*) {
     }
 
     evolvinggarden::app::update(FrameStepSeconds);
+
+    fpsLogSeconds += FrameStepSeconds;
+    if (activeDisplay != nullptr && fpsLogSeconds >= 2.0F) {
+        fpsLogSeconds = 0.0F;
+        std::uint32_t fps = 0;
+        if (esp_lv_adapter_get_fps(activeDisplay, &fps) == ESP_OK) {
+            ESP_LOGI(Tag, "Display refresh: %lu FPS", static_cast<unsigned long>(fps));
+        }
+    }
 }
 
 } // namespace
 
 extern "C" void app_main(void) {
     ESP_LOGI(Tag, "Starting EvolvingGarden on ESP32-S3-Touch-AMOLED-1.75C");
-    if (bsp_display_start() == nullptr) {
+    activeDisplay = bsp_display_start();
+    if (activeDisplay == nullptr) {
         ESP_LOGE(Tag, "Display initialization failed");
         return;
     }
+    ESP_ERROR_CHECK(esp_lv_adapter_fps_stats_enable(activeDisplay, true));
 
     activeBrightness = bsp_display_brightness_get();
     if (activeBrightness < 1) activeBrightness = 100;
