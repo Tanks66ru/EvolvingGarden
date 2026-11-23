@@ -652,6 +652,19 @@ void hideMenuPanel() {
     if (ui.menuPanel != nullptr) lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
 }
 
+void showGardenPanel() {
+    motion::requestWake();
+    if (ui.gardenPanel == nullptr) return;
+    refreshGardenPanel();
+    lv_obj_clear_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_to_index(ui.gardenPanel, -1);
+}
+
+void hideGardenPanel() {
+    motion::requestWake();
+    if (ui.gardenPanel != nullptr) lv_obj_add_flag(ui.gardenPanel, LV_OBJ_FLAG_HIDDEN);
+}
+
 void updateVolumeLabel(int percent) {
     if (ui.volumeLabel == nullptr) return;
     char text[12]{};
@@ -700,6 +713,14 @@ void onMenuLabClicked(lv_event_t*) {
 void onMenuVolumeClicked(lv_event_t*) {
     hideMenuPanel();
     showVolumePanel();
+}
+void onMenuGardenClicked(lv_event_t*) {
+    hideMenuPanel();
+    showGardenPanel();
+}
+void onGardenBackClicked(lv_event_t*) {
+    hideGardenPanel();
+    showMenuPanel();
 }
 void onMenuCloseClicked(lv_event_t*) { hideMenuPanel(); }
 
