@@ -395,8 +395,14 @@ std::uint32_t createUniqueCreatureSeed() {
         std::uint32_t seed = esp_random();
         if (seed == 0U) seed = 0xA341316CU + static_cast<std::uint32_t>(attempt);
         bool used = false;
+        const GeneratedCreatureName candidateName = generateCreatureName(seed);
         for (std::size_t i = 0; i < gardenState.count; ++i) {
-            if (gardenState.creatures[i].genome.seed == seed) {
+            const std::uint32_t existingSeed = gardenState.creatures[i].genome.seed;
+            const GeneratedCreatureName existingName = generateCreatureName(existingSeed);
+            const bool sameName = candidateName.title == existingName.title
+                && candidateName.adjective == existingName.adjective
+                && candidateName.noun == existingName.noun;
+            if (existingSeed == seed || sameName) {
                 used = true;
                 break;
             }
