@@ -1395,7 +1395,9 @@ void updatePipEyeCanvas(
     shapeRoll = updateEyeSpring(springs[RollSpring], shapeRoll, safeDt);
     shapeTaper = updateEyeSpring(springs[TaperSpring], shapeTaper, safeDt);
     lid = updateEyeSpring(
-        springs[LidSpring], std::max(lid, blinkTarget * 0.94F), safeDt, 380.0F, 0.88F);
+        springs[LidSpring], lid, safeDt, 260.0F, 0.88F);
+    const float blinkAmount = updateEyeSpring(
+        springs[BlinkSpring], blinkTarget, safeDt, 460.0F, 0.88F);
     lidTilt = updateEyeSpring(springs[LidTiltSpring], lidTilt, safeDt);
     smile = updateEyeSpring(springs[SmileSpring], smile, safeDt);
     pupilWidth = updateEyeSpring(springs[PupilWidthSpring], pupilWidth, safeDt);
@@ -1433,7 +1435,7 @@ void updatePipEyeCanvas(
         eye.pitch = headPitch;
         eye.roll = headRoll - side * shapeRoll;
         eye.taper = shapeTaper;
-        eye.lid = std::max(lid, blinkLid);
+        eye.lid = std::max(lid, blinkAmount * 0.94F);
         eye.tilt = -side * lidTilt;
         eye.smile = smile;
         eye.look_x = std::clamp(smoothGazeX * 0.040F - eye.yaw, -0.85F, 0.85F);
