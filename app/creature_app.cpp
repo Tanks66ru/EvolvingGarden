@@ -31,6 +31,9 @@ struct PetUi {
     lv_obj_t* debugLeftLabel = nullptr;
     lv_obj_t* debugRightLabel = nullptr;
     lv_obj_t* menuPanel = nullptr;
+    lv_obj_t* volumePanel = nullptr;
+    lv_obj_t* volumeSlider = nullptr;
+    lv_obj_t* volumeLabel = nullptr;
 };
 
 struct CreatureTouchGesture {
@@ -343,6 +346,42 @@ void hideMenuPanel() {
     if (ui.menuPanel != nullptr) lv_obj_add_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
 }
 
+void updateVolumeLabel(int percent) {
+    if (ui.volumeLabel == nullptr) return;
+    char text[12]{};
+    std::snprintf(text, sizeof(text), "%d%%", percent);
+    lv_label_set_text(ui.volumeLabel, text);
+}
+
+void showVolumePanel() {
+    motion::requestWake();
+    if (ui.volumePanel == nullptr) return;
+    const int currentVolume = static_cast<int>(audio::volumePercent());
+    if (ui.volumeSlider != nullptr) {
+        lv_slider_set_value(ui.volumeSlider, currentVolume, LV_ANIM_OFF);
+    }
+    updateVolumeLabel(currentVolume);
+    lv_obj_clear_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_to_index(ui.volumePanel, -1);
+}
+
+void hideVolumePanel() {
+    motion::requestWake();
+    if (ui.volumePanel != nullptr) lv_obj_add_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
+}
+
+void onVolumeSliderChanged(lv_event_t* event) {
+    lv_obj_t* slider = lv_event_get_target(event);
+    const int value = lv_slider_get_value(slider);
+    audio::setVolumePercent(static_cast<std::uint8_t>(value));
+    updateVolumeLabel(value);
+}
+
+void onVolumeBackClicked(lv_event_t*) {
+    hideVolumePanel();
+    showMenuPanel();
+}
+
 void onDebugCloseClicked(lv_event_t*) { hideDebugPanel(); }
 void onMenuFeedClicked(lv_event_t*) {
     hideMenuPanel();
@@ -351,6 +390,10 @@ void onMenuFeedClicked(lv_event_t*) {
 void onMenuLabClicked(lv_event_t*) {
     hideMenuPanel();
     showDebugPanel();
+}
+void onMenuVolumeClicked(lv_event_t*) {
+    hideMenuPanel();
+    showVolumePanel();
 }
 void onMenuCloseClicked(lv_event_t*) { hideMenuPanel(); }
 
@@ -639,8 +682,8 @@ void createUi() {
 
     ui.menuPanel = lv_obj_create(screen);
     lv_obj_remove_style_all(ui.menuPanel);
-    lv_obj_set_size(ui.menuPanel, 364, 292);
-    lv_obj_set_pos(ui.menuPanel, 51, 87);
+    lv_obj_set_size(ui.menuPanel, 364, 326);
+    lv_obj_set_pos(ui.menuPanel, 51, 70);
     lv_obj_set_style_bg_color(ui.menuPanel, color(0x1A2A35), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui.menuPanel, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(ui.menuPanel, 30, LV_PART_MAIN);
@@ -658,7 +701,63 @@ void createUi() {
 
     createMenuButton(ui.menuPanel, 64, "FEED", 0xE5C98F, onMenuFeedClicked);
     createMenuButton(ui.menuPanel, 128, "CREATURE LAB", 0x78C9A9, onMenuLabClicked);
-    createMenuButton(ui.menuPanel, 192, "CLOSE", 0xA8B9B5, onMenuCloseClicked);
+    createMenuButton(ui.menuPanel, 192, "VOLUME", 0x8EBBD0, onMenuVolumeClicked);
+    createMenuButton(ui.menuPanel, 256, "CLOSE", 0xA8B9B5, onMenuCloseClicked);
+
+    ui.volumePanel = lv_obj_create(screen);
+    lv_obj_remove_style_all(ui.volumePanel);
+    lv_obj_set_size(ui.volumePanel, 364, 252);
+    lv_obj_set_pos(ui.volumePanel, 51, 107);
+    lv_obj_set_style_bg_color(ui.volumePanel, color(0x1A2A35), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.volumePanel, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.volumePanel, 30, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui.volumePanel, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.volumePanel, color(0x4F8D79), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui.volumePanel, 0, LV_PART_MAIN);
+    lv_obj_add_flag(ui.volumePanel, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui.volumePanel, onScreenTouch, LV_EVENT_PRESSED, nullptr);
+    lv_obj_clear_flag(ui.volumePanel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t* volumeTitle = makeLabel(
+        ui.volumePanel, "SOUND", &lv_font_montserrat_18, 0xEAF2EF);
+    lv_obj_set_width(volumeTitle, 316);
+    lv_obj_set_pos(volumeTitle, 24, 15);
+
+    lv_obj_t* volumeHint = makeLabel(
+        ui.volumePanel, "MASTER VOLUME", &lv_font_montserrat_12, 0x91AAA4);
+    lv_obj_set_width(volumeHint, 316);
+    lv_obj_set_pos(volumeHint, 24, 57);
+
+    ui.volumeLabel = makeLabel(
+        ui.volumePanel, "100%", &lv_font_montserrat_24, 0xBDE5D5);
+    lv_obj_set_width(ui.volumeLabel, 316);
+    lv_obj_set_pos(ui.volumeLabel, 24, 79);
+
+    ui.volumeSlider = lv_slider_create(ui.volumePanel);
+    lv_obj_set_size(ui.volumeSlider, 286, 18);
+    lv_obj_set_pos(ui.volumeSlider, 39, 143);
+    lv_slider_set_range(ui.volumeSlider, 0, 100);
+    lv_slider_set_value(ui.volumeSlider, static_cast<int>(audio::volumePercent()), LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(ui.volumeSlider, color(0x344A54), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui.volumeSlider, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui.volumeSlider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(ui.volumeSlider, color(0x72C7A8), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(ui.volumeSlider, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(ui.volumeSlider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(ui.volumeSlider, color(0xEAF2EF), LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(ui.volumeSlider, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_radius(ui.volumeSlider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+    lv_obj_add_event_cb(ui.volumeSlider, onVolumeSliderChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    lv_obj_t* volumeMinimum = makeLabel(
+        ui.volumePanel, "MUTE", &lv_font_montserrat_10, 0x91AAA4);
+    lv_obj_set_pos(volumeMinimum, 38, 169);
+    lv_obj_t* volumeMaximum = makeLabel(
+        ui.volumePanel, "MAX", &lv_font_montserrat_10, 0x91AAA4);
+    lv_obj_set_pos(volumeMaximum, 364 - 38 - 38, 169);
+
+    createMenuButton(ui.volumePanel, 188, "BACK TO GARDEN", 0xA8B9B5, onVolumeBackClicked);
 }
 
 void updateCreatureVisuals() {
@@ -881,6 +980,10 @@ void initialize() {
 }
 
 void toggleDebugPanel() {
+    if (ui.volumePanel != nullptr
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) {
+        hideVolumePanel();
+    }
     if (ui.debugPanel == nullptr) return;
     if (ui.menuPanel != nullptr && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) {
         hideMenuPanel();
@@ -895,6 +998,10 @@ void toggleDebugPanel() {
 }
 
 void toggleMenuPanel() {
+    if (ui.volumePanel != nullptr
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN)) {
+        hideVolumePanel();
+    }
     if (ui.menuPanel == nullptr) return;
     if (ui.debugPanel != nullptr) hideDebugPanel();
     if (lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN)) showMenuPanel();
@@ -950,7 +1057,9 @@ void update(float deltaSeconds) {
         && !lv_obj_has_flag(ui.debugPanel, LV_OBJ_FLAG_HIDDEN);
     const bool menuVisible = ui.menuPanel != nullptr
         && !lv_obj_has_flag(ui.menuPanel, LV_OBJ_FLAG_HIDDEN);
-    if (!debugVisible && !menuVisible && !sensor.screenSleeping) {
+    const bool volumeVisible = ui.volumePanel != nullptr
+        && !lv_obj_has_flag(ui.volumePanel, LV_OBJ_FLAG_HIDDEN);
+    if (!debugVisible && !menuVisible && !volumeVisible && !sensor.screenSleeping) {
         updateCreatureVisuals();
     }
     if (debugVisible && animationTime >= nextDebugRefresh) {
