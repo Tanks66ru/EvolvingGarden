@@ -22,6 +22,7 @@ struct PetUi {
     lv_obj_t* eyes[2]{};
     lv_obj_t* pupils[2]{};
     lv_obj_t* highlights[2]{};
+    lv_obj_t* secondaryHighlights[2]{};
     lv_obj_t* mouth = nullptr;
     lv_obj_t* brows[2]{};
     lv_obj_t* appendages[3]{};
@@ -532,7 +533,7 @@ void onCreaturePointer(lv_event_t* event) {
         const float offsetX = x - 233.0F;
         const float offsetY = y - 233.0F;
         const float radius = std::sqrt(offsetX * offsetX + offsetY * offsetY);
-        if (radius < 48.0F || radius > 158.0F) {
+        if (radius < 52.0F || radius > 218.0F) {
             creatureTouch.hasAngle = false;
             return;
         }
@@ -586,24 +587,24 @@ void createCreature(lv_obj_t* parent) {
     lv_obj_add_flag(ui.appendages[0], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[0], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[0], onCreaturePointer, LV_EVENT_ALL, nullptr);
-    makeFlatObject(ui.appendages[0], 0x40977F, LV_RADIUS_CIRCLE);
+    makeFlatObject(ui.appendages[0], 0x3D817B, LV_RADIUS_CIRCLE);
 
     ui.appendages[1] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[1], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[1], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[1], onCreaturePointer, LV_EVENT_ALL, nullptr);
-    makeFlatObject(ui.appendages[1], 0x40977F, LV_RADIUS_CIRCLE);
+    makeFlatObject(ui.appendages[1], 0x3D817B, LV_RADIUS_CIRCLE);
 
     ui.appendages[2] = lv_obj_create(parent);
     lv_obj_add_flag(ui.appendages[2], static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.appendages[2], LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(ui.appendages[2], onCreaturePointer, LV_EVENT_ALL, nullptr);
-    makeFlatObject(ui.appendages[2], 0x40977F, LV_RADIUS_CIRCLE);
+    makeFlatObject(ui.appendages[2], 0x3D817B, LV_RADIUS_CIRCLE);
 
     ui.body = lv_obj_create(parent);
-    makeFlatObject(ui.body, 0x64C5A7, LV_RADIUS_CIRCLE);
-    lv_obj_set_style_border_width(ui.body, 4, LV_PART_MAIN);
-    lv_obj_set_style_border_color(ui.body, color(0x347E70), LV_PART_MAIN);
+    makeFlatObject(ui.body, 0x4F998E, LV_RADIUS_CIRCLE);
+    lv_obj_set_style_border_width(ui.body, 5, LV_PART_MAIN);
+    lv_obj_set_style_border_color(ui.body, color(0x214E58), LV_PART_MAIN);
     // Keep the creature flat: software shadow blur is expensive on the ESP32-S3.
     lv_obj_add_flag(ui.body, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK));
     lv_obj_clear_flag(ui.body, LV_OBJ_FLAG_SCROLLABLE);
@@ -613,45 +614,53 @@ void createCreature(lv_obj_t* parent) {
         ui.eyes[i] = lv_obj_create(ui.body);
         lv_obj_add_flag(ui.eyes[i], LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_clear_flag(ui.eyes[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.eyes[i], 0xF5F7F4, LV_RADIUS_CIRCLE);
+        makeFlatObject(ui.eyes[i], 0xF1F3EE, LV_RADIUS_CIRCLE);
         lv_obj_set_style_border_width(ui.eyes[i], 1, LV_PART_MAIN);
-        lv_obj_set_style_border_color(ui.eyes[i], color(0xDCE5E1), LV_PART_MAIN);
+        lv_obj_set_style_border_color(ui.eyes[i], color(0xAAB8B7), LV_PART_MAIN);
 
         ui.pupils[i] = lv_obj_create(ui.eyes[i]);
         lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.pupils[i], 0x182630, LV_RADIUS_CIRCLE);
+        makeFlatObject(ui.pupils[i], 0x15232D, LV_RADIUS_CIRCLE);
+        lv_obj_set_style_border_width(ui.pupils[i], 2, LV_PART_MAIN);
+        lv_obj_set_style_border_color(ui.pupils[i], color(0x506872), LV_PART_MAIN);
 
         ui.highlights[i] = lv_obj_create(ui.pupils[i]);
         lv_obj_clear_flag(ui.highlights[i], LV_OBJ_FLAG_SCROLLABLE);
         makeFlatObject(ui.highlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
-        lv_obj_set_size(ui.highlights[i], 7, 7);
-        lv_obj_set_pos(ui.highlights[i], 4, 4);
+        lv_obj_set_size(ui.highlights[i], 10, 12);
+        lv_obj_set_pos(ui.highlights[i], 7, 8);
+
+        ui.secondaryHighlights[i] = lv_obj_create(ui.pupils[i]);
+        lv_obj_clear_flag(ui.secondaryHighlights[i], LV_OBJ_FLAG_SCROLLABLE);
+        makeFlatObject(ui.secondaryHighlights[i], 0xFFFFFF, LV_RADIUS_CIRCLE);
+        lv_obj_set_size(ui.secondaryHighlights[i], 4, 4);
+        lv_obj_set_pos(ui.secondaryHighlights[i], 24, 29);
 
         ui.brows[i] = lv_obj_create(ui.body);
         lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_SCROLLABLE);
-        makeFlatObject(ui.brows[i], 0x347E70, LV_RADIUS_CIRCLE);
-        lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
+        makeFlatObject(ui.brows[i], 0x20343D, 4);
+        lv_obj_set_style_border_width(ui.brows[i], 0, LV_PART_MAIN);
     }
 
     ui.mouth = lv_obj_create(ui.body);
     lv_obj_add_flag(ui.mouth, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_clear_flag(ui.mouth, LV_OBJ_FLAG_SCROLLABLE);
-    makeFlatObject(ui.mouth, 0x25333A, LV_RADIUS_CIRCLE);
+    makeFlatObject(ui.mouth, 0x1C2A31, LV_RADIUS_CIRCLE);
 
-    lv_obj_set_size(ui.body, 291, 260);
-    lv_obj_set_pos(ui.body, 87, 103);
-    lv_obj_set_size(ui.eyes[0], 66, 70);
-    lv_obj_set_size(ui.eyes[1], 64, 70);
-    lv_obj_set_pos(ui.eyes[0], 49, 76);
-    lv_obj_set_pos(ui.eyes[1], 169, 76);
-    lv_obj_set_size(ui.pupils[0], 22, 29);
-    lv_obj_set_size(ui.pupils[1], 22, 29);
-    lv_obj_set_pos(ui.pupils[0], 22, 20);
-    lv_obj_set_pos(ui.pupils[1], 21, 20);
-    lv_obj_set_size(ui.mouth, 38, 10);
-    lv_obj_set_pos(ui.mouth, 126, 187);
+    lv_obj_set_size(ui.body, 392, 374);
+    lv_obj_set_pos(ui.body, 37, 46);
+    lv_obj_set_size(ui.eyes[0], 84, 96);
+    lv_obj_set_size(ui.eyes[1], 83, 96);
+    lv_obj_set_pos(ui.eyes[0], 86, 94);
+    lv_obj_set_pos(ui.eyes[1], 227, 94);
+    lv_obj_set_size(ui.pupils[0], 42, 60);
+    lv_obj_set_size(ui.pupils[1], 42, 60);
+    lv_obj_set_pos(ui.pupils[0], 21, 18);
+    lv_obj_set_pos(ui.pupils[1], 20, 18);
+    lv_obj_set_size(ui.mouth, 44, 9);
+    lv_obj_set_pos(ui.mouth, 174, 269);
 }
 
 void createUi() {
@@ -890,10 +899,10 @@ void updateCreatureVisuals() {
 
     // Apply the same scale on both axes: the creature compresses and rebounds,
     // but its proportions never stretch sideways.
-    const int bodyWidth = static_cast<int>(291.0F
-        * (0.88F + genes.bodyWidth * 0.0024F) * hitScale);
-    const int bodyHeight = static_cast<int>(260.0F
-        * (0.88F + genes.bodyHeight * 0.0024F) * hitScale);
+    const int bodyWidth = static_cast<int>(392.0F
+        * (0.94F + genes.bodyWidth * 0.0011F) * hitScale);
+    const int bodyHeight = static_cast<int>(374.0F
+        * (0.94F + genes.bodyHeight * 0.0011F) * hitScale);
     bodyY = 233.0F - static_cast<float>(bodyHeight) * 0.5F
         + std::sin(phase * 1.8F) * (1.5F + activity * 2.2F);
     bodyX = (466.0F - static_cast<float>(bodyWidth)) * 0.5F + bodyOffsetX;
@@ -903,33 +912,36 @@ void updateCreatureVisuals() {
     static bool previousHitFlash = false;
     const bool hitFlash = hitElapsed >= 0.0F && hitElapsed < 0.045F;
     if (hitFlash != previousHitFlash) {
-        lv_obj_set_style_bg_color(ui.body, color(hitFlash ? 0xF4E2B2 : 0x64C5A7), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(ui.body, color(hitFlash ? 0xF1D39A : 0x4F998E), LV_PART_MAIN);
         previousHitFlash = hitFlash;
     }
 
     const float appendageWave = std::sin(phase * (2.3F + activity * 2.8F));
     const float appendageBoost = exaggerated ? 1.8F : 1.0F;
-    const int appendageLength = 28 + static_cast<int>(genes.appendageLength * 0.30F);
-    lv_obj_set_size(ui.appendages[0], appendageLength + 36, 25);
-    lv_obj_set_size(ui.appendages[1], appendageLength + 36, 25);
-    lv_obj_set_size(ui.appendages[2], 22, appendageLength + 20);
-    lv_obj_set_pos(ui.appendages[0], static_cast<int>(bodyX - appendageLength * 0.72F),
+    const int appendageLength = 32 + static_cast<int>(genes.appendageLength * 0.32F);
+    const int sideAppendageWidth = appendageLength + 32;
+    constexpr float sideAppendageOffset = 20.0F;
+    lv_obj_set_size(ui.appendages[0], sideAppendageWidth, 26);
+    lv_obj_set_size(ui.appendages[1], sideAppendageWidth, 26);
+    lv_obj_set_size(ui.appendages[2], 26, appendageLength + 20);
+    lv_obj_set_pos(ui.appendages[0], static_cast<int>(bodyX - sideAppendageOffset),
         static_cast<int>(bodyY + bodyHeight * 0.54F + appendageWave * 5.0F * appendageBoost));
-    lv_obj_set_pos(ui.appendages[1], static_cast<int>(bodyX + bodyWidth - 48.0F + appendageLength * 0.30F),
+    lv_obj_set_pos(ui.appendages[1],
+        static_cast<int>(bodyX + bodyWidth - sideAppendageWidth + sideAppendageOffset),
         static_cast<int>(bodyY + bodyHeight * 0.49F - appendageWave * 6.0F * appendageBoost));
     lv_obj_set_pos(ui.appendages[2], static_cast<int>(bodyX + bodyWidth * 0.47F),
-        static_cast<int>(bodyY - appendageLength * 0.80F + std::sin(phase * 3.0F) * 4.0F));
+        static_cast<int>(bodyY - appendageLength * 0.62F + std::sin(phase * 3.0F) * 4.0F));
     for (int i = 0; i < 3; ++i) {
         const bool visible = genes.appendageCount > i;
         if (visible) lv_obj_clear_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(ui.appendages[i], LV_OBJ_FLAG_HIDDEN);
     }
 
-    const float eyeScale = 0.82F + static_cast<float>(genes.eyeSize) * 0.0032F;
-    const int eyeWidth = static_cast<int>(64.0F * eyeScale);
-    const int baseEyeHeight = static_cast<int>(70.0F * eyeScale);
-    const int eyeY = static_cast<int>(bodyHeight * 0.29F);
-    const int leftX = static_cast<int>(bodyWidth * 0.17F);
+    const float eyeScale = 0.90F + static_cast<float>(genes.eyeSize) * 0.0028F;
+    const int eyeWidth = static_cast<int>(78.0F * eyeScale);
+    const int baseEyeHeight = static_cast<int>(90.0F * eyeScale);
+    const int eyeY = static_cast<int>(bodyHeight * 0.25F);
+    const int leftX = static_cast<int>(bodyWidth * 0.22F);
     const int rightX = static_cast<int>(bodyWidth * 0.58F);
 
     float gazeX = std::sin(phase * 0.72F) * 5.5F + std::sin(phase * 0.21F) * 2.0F;
@@ -945,17 +957,17 @@ void updateCreatureVisuals() {
 
     const float blinkPhase = std::fmod(phase + static_cast<float>(pet.genome().seed % 31U) * 0.07F, 4.2F);
     const bool blink = blinkPhase > 3.92F && blinkPhase < 4.12F;
-    int eyeHeight = baseEyeHeight;
-    if (angryFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.72F);
-    else if (happyFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.66F);
-    else if (sadFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.82F);
-    else if (surprisedFace || afraidFace) eyeHeight = static_cast<int>(baseEyeHeight * 1.10F);
+    int eyeHeight = static_cast<int>(baseEyeHeight * 0.90F);
+    if (angryFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.69F);
+    else if (happyFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.76F);
+    else if (sadFace) eyeHeight = static_cast<int>(baseEyeHeight * 0.84F);
+    else if (surprisedFace || afraidFace) eyeHeight = static_cast<int>(baseEyeHeight * 1.08F);
     if (blink) eyeHeight = 7;
 
     static bool previousBlink = false;
     if (blink != previousBlink) {
         for (int i = 0; i < 2; ++i) {
-            lv_obj_set_style_bg_color(ui.eyes[i], color(blink ? 0x4DAD94 : 0xF5F7F4), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(ui.eyes[i], color(blink ? 0x4F998E : 0xF1F3EE), LV_PART_MAIN);
         }
         previousBlink = blink;
     }
@@ -965,37 +977,50 @@ void updateCreatureVisuals() {
         const int individualEyeWidth = eyeWidth + (i == 0 ? 2 : -1);
         lv_obj_set_size(ui.eyes[i], individualEyeWidth, eyeHeight);
         lv_obj_set_pos(ui.eyes[i], eyeX, eyeY + (blink ? 20 : 0));
+        // Pip-inspired spherical eye treatment: slight inward tilt, deep pupil and paired catchlights.
+        const int eyeTilt = i == 0 ? 75 : -75;
+        lv_obj_set_style_transform_angle(ui.eyes[i], eyeTilt, LV_PART_MAIN);
 
         if (blink) {
             lv_obj_add_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_obj_clear_flag(ui.pupils[i], LV_OBJ_FLAG_HIDDEN);
-            const int pupilWidth = std::max(16, static_cast<int>(individualEyeWidth * (afraidFace ? 0.29F : 0.34F)));
-            const int pupilHeight = std::max(20, static_cast<int>(eyeHeight * 0.43F));
+            const int pupilWidth = std::max(22, static_cast<int>(individualEyeWidth * (afraidFace ? 0.44F : 0.50F)));
+            const int pupilHeight = std::max(30, static_cast<int>(eyeHeight * 0.62F));
             lv_obj_set_size(ui.pupils[i], pupilWidth, pupilHeight);
             const int pupilX = (individualEyeWidth - pupilWidth) / 2 + static_cast<int>(gazeX);
             const int pupilY = (eyeHeight - pupilHeight) / 2 + static_cast<int>(gazeY);
             lv_obj_set_pos(ui.pupils[i], pupilX, pupilY);
+
+            const int largeGlint = std::max(7, pupilWidth / 4);
+            const int tallGlint = std::max(8, pupilHeight / 5);
+            lv_obj_set_size(ui.highlights[i], largeGlint, tallGlint);
+            lv_obj_set_pos(ui.highlights[i], pupilWidth / 6, pupilHeight / 7);
+            lv_obj_set_size(ui.secondaryHighlights[i], 4, 4);
+            lv_obj_set_pos(ui.secondaryHighlights[i], pupilWidth * 2 / 3, pupilHeight * 3 / 5);
         }
 
-        if (angryFace) {
-            lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_size(ui.brows[i], individualEyeWidth + 3, 7);
-            lv_obj_set_pos(ui.brows[i], eyeX - 1, eyeY - 8 + (i == 0 ? 4 : 0));
-        } else {
-            lv_obj_add_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
-        }
+        lv_obj_clear_flag(ui.brows[i], LV_OBJ_FLAG_HIDDEN);
+        const int browHeight = angryFace ? 13 : 10;
+        lv_obj_set_size(ui.brows[i], individualEyeWidth + 12, browHeight);
+        lv_obj_set_pos(ui.brows[i], eyeX - 6, eyeY - (angryFace ? 9 : 14));
+        const int browAngle = i == 0
+            ? (angryFace ? 175 : (happyFace ? 35 : 80))
+            : (angryFace ? -175 : (happyFace ? -35 : -80));
+        lv_obj_set_style_transform_angle(ui.brows[i], browAngle, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(ui.brows[i],
+            color(angryFace ? 0x15232D : 0x20343D), LV_PART_MAIN);
     }
 
-    int mouthWidth = 38;
-    int mouthHeight = 10;
+    int mouthWidth = 44;
+    int mouthHeight = 9;
     int mouthY = static_cast<int>(bodyHeight * 0.72F);
-    if (happyFace) { mouthWidth = 40; mouthHeight = 10; mouthY -= 2; }
-    if (sadFace) { mouthWidth = 27; mouthHeight = 6; mouthY += 5; }
-    if (angryFace) { mouthWidth = 31; mouthHeight = 5; mouthY += 2; }
-    if (surprisedFace || afraidFace) { mouthWidth = 18; mouthHeight = 21; }
-    if (disgustedFace) { mouthWidth = 37; mouthHeight = 5; }
-    if (reaction == Reaction::Curious) { mouthWidth = 13; mouthHeight = 13; }
+    if (happyFace) { mouthWidth = 48; mouthHeight = 12; mouthY -= 2; }
+    if (sadFace) { mouthWidth = 33; mouthHeight = 7; mouthY += 5; }
+    if (angryFace) { mouthWidth = 42; mouthHeight = 5; mouthY += 2; }
+    if (surprisedFace || afraidFace) { mouthWidth = 23; mouthHeight = 25; }
+    if (disgustedFace) { mouthWidth = 45; mouthHeight = 6; }
+    if (reaction == Reaction::Curious) { mouthWidth = 17; mouthHeight = 15; }
 
     lv_obj_set_size(ui.mouth, mouthWidth, mouthHeight);
     lv_obj_set_pos(ui.mouth, (bodyWidth - mouthWidth) / 2, mouthY);
