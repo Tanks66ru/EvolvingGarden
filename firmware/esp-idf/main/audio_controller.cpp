@@ -296,7 +296,7 @@ void initialize() {
     spk = bsp_audio_codec_speaker_init();
     if (spk != nullptr && esp_codec_dev_open(spk, &format) == ESP_CODEC_DEV_OK) {
         speakerOnline.store(true);
-        esp_codec_dev_set_out_vol(spk, 68);
+        esp_codec_dev_set_out_vol(spk, 46);
         ESP_LOGI(Tag, "Speaker ready");
     } else {
         spk = nullptr;
