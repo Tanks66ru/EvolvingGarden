@@ -61,6 +61,40 @@ struct CreatureTouchGesture {
     float startY = 0.0F;
 };
 
+struct EyeSpringState {
+    float value = 0.0F;
+    float velocity = 0.0F;
+    bool initialized = false;
+};
+
+float updateEyeSpring(
+    EyeSpringState& spring,
+    float target,
+    float deltaSeconds,
+    float stiffness = 220.0F,
+    float damping = 0.82F)
+{
+    if (!spring.initialized) {
+        spring.value = target;
+        spring.velocity = 0.0F;
+        spring.initialized = true;
+        return spring.value;
+    }
+
+    const float dt = std::clamp(deltaSeconds, 0.0F, 0.06F);
+    const float angularFrequency = std::sqrt(stiffness);
+    const float acceleration = (target - spring.value) * stiffness
+        - 2.0F * damping * angularFrequency * spring.velocity;
+    spring.velocity += acceleration * dt;
+    spring.value += spring.velocity * dt;
+    return spring.value;
+}
+
+float smoothUnit(float value) {
+    const float t = std::clamp(value, 0.0F, 1.0F);
+    return t * t * (3.0F - 2.0F * t);
+}
+
 CreatureSimulation pet(makeDefaultGenome());
 PetUi ui;
 face_t pipEyeFace{};
@@ -169,7 +203,7 @@ std::uint32_t blendHex(std::uint32_t from, std::uint32_t to, float amount) {
 void updateBackground(float dt) {
     if (ui.screen == nullptr) return;
     backgroundRefreshSeconds += dt;
-    if (backgroundRefreshSeconds < 0.12F) return;
+    if (backgroundRefreshSeconds < 0.50F) return;
     backgroundRefreshSeconds = 0.0F;
 
     const auto& genes = pet.genome().personality;
@@ -1221,6 +1255,7 @@ void updatePipEyeCanvas(
     int bodyWidth,
     int bodyHeight,
     float phase,
+    float deltaSeconds,
     float gazeX,
     float gazeY,
     bool angryFace,
@@ -1233,21 +1268,6 @@ void updatePipEyeCanvas(
     bool hitFlash)
 {
     if (ui.eyeCanvas == nullptr || ui.eyeBuffer == nullptr) return;
-
-    static float nextEyeRenderAt = 0.0F;
-    static std::uint8_t previousExpression = 0xFFU;
-    static bool previousHitFlash = false;
-    const std::uint8_t expression =
-        static_cast<std::uint8_t>((angryFace ? 1U : 0U)
-        | (sadFace ? 2U : 0U) | (happyFace ? 4U : 0U)
-        | (afraidFace ? 8U : 0U) | (surprisedFace ? 16U : 0U)
-        | (curiousFace ? 32U : 0U) | (disgustedFace ? 64U : 0U));
-    const bool expressionChanged = expression != previousExpression;
-    const bool hitFlashChanged = hitFlash != previousHitFlash;
-    if (phase < nextEyeRenderAt && !expressionChanged && !hitFlashChanged) return;
-    previousExpression = expression;
-    previousHitFlash = hitFlash;
-    nextEyeRenderAt = phase + (1.0F / 15.0F);
 
     const int canvasX = (bodyWidth - PipEyeCanvasWidth) / 2;
     const int canvasY = (bodyHeight - PipEyeCanvasHeight) / 2;
@@ -1318,19 +1338,80 @@ void updatePipEyeCanvas(
         shapeTaper = -0.05F; pupilWidth = 0.50F; pupilHeight = 0.54F;
     }
 
-    const float headYaw = std::clamp(gazeX * 0.012F, -0.10F, 0.10F);
-    const float headPitch = std::clamp(gazeY * 0.010F, -0.06F, 0.06F);
-    float headRoll = std::sin(phase * 0.17F) * 0.015F;
-    if (happyFace) headRoll = 0.12F;
-    else if (sadFace) headRoll = -0.10F;
-    else if (curiousFace) headRoll = 0.16F;
+    // Every expressive parameter follows a damped spring, like Pip's native face
+    // animation. The app updates at 30 Hz, while the panel itself can refresh faster.
+    enum EyeSpring : std::size_t {
+        WidthSpring,
+        HeightSpring,
+        RollSpring,
+        TaperSpring,
+        LidSpring,
+        LidTiltSpring,
+        SmileSpring,
+        PupilWidthSpring,
+        PupilHeightSpring,
+        HeadYawSpring,
+        HeadPitchSpring,
+        HeadRollSpring,
+        GazeXSpring,
+        GazeYSpring,
+        WetSpring,
+        BlinkSpring,
+        EyeSpringCount
+    };
+    static EyeSpringState springs[EyeSpringCount]{};
 
-    // Keep Pip's natural blink cadence, but close the lid rather than collapsing
-    // the mesh to zero height, which is safer for this small embedded renderer.
+    const float headYawTarget = std::clamp(gazeX * 0.012F, -0.10F, 0.10F);
+    const float headPitchTarget = std::clamp(gazeY * 0.010F, -0.06F, 0.06F);
+    float headRollTarget = std::sin(phase * 0.17F) * 0.015F;
+    if (happyFace) headRollTarget = 0.12F;
+    else if (sadFace) headRollTarget = -0.10F;
+    else if (curiousFace) headRollTarget = 0.16F;
+
     const float blinkPhase = std::fmod(
         phase + static_cast<float>(pet.genome().seed % 31U) * 0.07F, 4.2F);
-    const bool blink = blinkPhase > 3.92F && blinkPhase < 4.12F;
-    const float blinkLid = blink ? 0.94F : 0.0F;
+    float blinkTarget = 0.0F;
+    constexpr float BlinkStart = 3.90F;
+    constexpr float BlinkCloseSeconds = 0.085F;
+    constexpr float BlinkHoldSeconds = 0.045F;
+    constexpr float BlinkOpenSeconds = 0.15F;
+    const float blinkElapsed = blinkPhase - BlinkStart;
+    if (blinkElapsed >= 0.0F
+        && blinkElapsed < BlinkCloseSeconds + BlinkHoldSeconds + BlinkOpenSeconds) {
+        if (blinkElapsed < BlinkCloseSeconds) {
+            blinkTarget = smoothUnit(blinkElapsed / BlinkCloseSeconds);
+        } else if (blinkElapsed < BlinkCloseSeconds + BlinkHoldSeconds) {
+            blinkTarget = 1.0F;
+        } else {
+            const float openingProgress =
+                (blinkElapsed - BlinkCloseSeconds - BlinkHoldSeconds) / BlinkOpenSeconds;
+            blinkTarget = 1.0F - smoothUnit(openingProgress);
+        }
+    }
+
+    const float safeDt = std::clamp(deltaSeconds, 0.0F, 0.06F);
+    shapeWidth = updateEyeSpring(springs[WidthSpring], shapeWidth, safeDt);
+    shapeHeight = updateEyeSpring(springs[HeightSpring], shapeHeight, safeDt);
+    shapeRoll = updateEyeSpring(springs[RollSpring], shapeRoll, safeDt);
+    shapeTaper = updateEyeSpring(springs[TaperSpring], shapeTaper, safeDt);
+    lid = updateEyeSpring(
+        springs[LidSpring], std::max(lid, blinkTarget * 0.94F), safeDt, 380.0F, 0.88F);
+    lidTilt = updateEyeSpring(springs[LidTiltSpring], lidTilt, safeDt);
+    smile = updateEyeSpring(springs[SmileSpring], smile, safeDt);
+    pupilWidth = updateEyeSpring(springs[PupilWidthSpring], pupilWidth, safeDt);
+    pupilHeight = updateEyeSpring(springs[PupilHeightSpring], pupilHeight, safeDt);
+    const float headYaw = updateEyeSpring(
+        springs[HeadYawSpring], headYawTarget, safeDt, 160.0F, 0.88F);
+    const float headPitch = updateEyeSpring(
+        springs[HeadPitchSpring], headPitchTarget, safeDt, 160.0F, 0.88F);
+    const float headRoll = updateEyeSpring(
+        springs[HeadRollSpring], headRollTarget, safeDt, 150.0F, 0.86F);
+    const float smoothGazeX = updateEyeSpring(
+        springs[GazeXSpring], gazeX, safeDt, 150.0F, 0.90F);
+    const float smoothGazeY = updateEyeSpring(
+        springs[GazeYSpring], gazeY, safeDt, 150.0F, 0.90F);
+    const float wet = updateEyeSpring(
+        springs[WetSpring], sadFace ? 0.18F : (afraidFace ? 0.08F : 0.0F), safeDt);
 
     for (int i = 0; i < 2; ++i) {
         const float side = i ? 1.0F : -1.0F;
@@ -1355,8 +1436,8 @@ void updatePipEyeCanvas(
         eye.lid = std::max(lid, blinkLid);
         eye.tilt = -side * lidTilt;
         eye.smile = smile;
-        eye.look_x = std::clamp(gazeX * 0.040F - eye.yaw, -0.85F, 0.85F);
-        eye.look_y = std::clamp(gazeY * 0.035F - eye.pitch, -0.70F, 0.70F);
+        eye.look_x = std::clamp(smoothGazeX * 0.040F - eye.yaw, -0.85F, 0.85F);
+        eye.look_y = std::clamp(smoothGazeY * 0.035F - eye.pitch, -0.70F, 0.70F);
         eye.pw = pupilWidth;
         eye.ph = pupilHeight;
         eye.square = 0.0F;
@@ -1366,14 +1447,14 @@ void updatePipEyeCanvas(
         eye.glint = 0.0F;
         eye.spiral = 0.0F;
         eye.veins = 0.0F;
-        eye.wet = sadFace ? 0.18F : (afraidFace ? 0.08F : 0.0F);
+        eye.wet = wet;
     }
 
     face_draw(&pipEyeFace, pixels, PipEyeCanvasWidth, PipEyeCanvasHeight);
     lv_obj_invalidate(ui.eyeCanvas);
 }
 
-void updateCreatureVisuals() {
+void updateCreatureVisuals(float deltaSeconds) {
     const auto& genes = pet.genome().morphology;
     const float activity = static_cast<float>(pet.genome().personality.activity + 100) / 200.0F;
     const float phase = animationTime;
@@ -1509,7 +1590,7 @@ void updateCreatureVisuals() {
         gazeX = std::clamp(gazeX, -8.0F, 8.0F);
         gazeY = std::clamp(gazeY, -6.0F, 6.0F);
 
-        updatePipEyeCanvas(bodyWidth, bodyHeight, phase, gazeX, gazeY,
+        updatePipEyeCanvas(bodyWidth, bodyHeight, phase, deltaSeconds, gazeX, gazeY,
             angryFace, sadFace, happyFace, afraidFace, surprisedFace,
             curiousFace, disgustedFace, hitFlash);
 
@@ -1751,7 +1832,7 @@ void update(float deltaSeconds) {
     }
 
     if (!overlayVisible && !sensor.screenSleeping) {
-        updateCreatureVisuals();
+        updateCreatureVisuals(dt);
     }
     if (debugVisible && animationTime >= nextDebugRefresh) {
         refreshDebugPanel();
